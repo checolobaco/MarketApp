@@ -309,6 +309,58 @@ router.get("/quote", async (req, res) => {
   }
 });
 
+// Helper para extraer la divisa de cotización del par
+function getQuoteCurrency(marketName, marketId) {
+  const name = (marketName || "").toUpperCase().trim();
+  if (name.includes("/JPY") || name.endsWith("JPY") || marketId === 401203119) return "JPY";
+  if (name.includes("/NZD") || name.endsWith("NZD") || marketId === 401203116) return "NZD";
+  if (name.includes("/GBP") || name.endsWith("GBP")) return "GBP";
+  if (name.includes("/EUR") || name.endsWith("EUR")) return "EUR";
+  if (name.includes("/CHF") || name.endsWith("CHF")) return "CHF";
+  if (name.includes("/CAD") || name.endsWith("CAD")) return "CAD";
+  if (name.includes("/AUD") || name.endsWith("AUD")) return "AUD";
+  return "USD";
+}
+
+// Helper para obtener tasa de conversión a USD para divisas secundarias
+async function getUsdConversionRate(client, quoteCurrency) {
+  if (!quoteCurrency || quoteCurrency === "USD") return 1.0;
+  
+  // IDs de mercado para pares de conversión contra USD en Forex.com
+  const conversionMarkets = {
+    "JPY": 401483120, // USD/JPY
+    "NZD": 401203125, // NZD/USD
+    "GBP": 401203117, // GBP/USD
+    "EUR": 401449254  // EUR/USD
+  };
+
+  const marketId = conversionMarkets[quoteCurrency];
+  if (!marketId) return 1.0;
+
+  try {
+    const marketInfo = await client.getMarketInformation(marketId);
+    const details = marketInfo?.MarketInformation || {};
+    const price = details.Bid ? Number(details.Bid) : null;
+    if (price) {
+      if (quoteCurrency === "JPY") {
+        return 1.0 / price;
+      }
+      return price;
+    }
+  } catch (e) {
+    console.warn(`[getUsdConversionRate] No se pudo obtener tasa para ${quoteCurrency}:`, e.message);
+  }
+
+  // Tasas fijas estimadas de fallback si el broker está offline o es fin de semana
+  const staticFallbacks = {
+    "JPY": 1.0 / 161.7,
+    "NZD": 0.61,
+    "GBP": 1.28,
+    "EUR": 1.09
+  };
+  return staticFallbacks[quoteCurrency] || 1.0;
+}
+
 // 8. Get Open Positions
 router.get("/positions", async (req, res) => {
   try {
@@ -393,7 +445,15 @@ router.get("/positions", async (req, res) => {
           currentPrice = pos.Direction === "buy" ? bid : offer;
           const diff = currentPrice - pos.Price;
           const factor = pos.Direction === "buy" ? 1 : -1;
-          profitLoss = diff * pos.Quantity * factor;
+          
+          // Calcular el P&L bruto en la divisa de cotización del par (segunda divisa)
+          const rawPnl = diff * pos.Quantity * factor;
+          
+          // Convertir el P&L a USD (moneda base de la cuenta del usuario)
+          const quoteCurrency = (pos.Currency || getQuoteCurrency(pos.MarketName, pos.MarketId)).toUpperCase();
+          const conversionRate = await getUsdConversionRate(client, quoteCurrency);
+          
+          profitLoss = rawPnl * conversionRate;
         }
       } catch (priceErr) {
         console.warn(`[positions] No se pudo obtener cotización para calcular P&L de ${pos.MarketId}:`, priceErr.message);

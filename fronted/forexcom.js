@@ -66,7 +66,6 @@ const ordersTableBody = document.getElementById("orders-table-body");
 // Prediction Elements
 const btnRunPrediction = document.getElementById("btn-run-prediction");
 const btnRunScalpPrediction = document.getElementById("btn-run-scalp-prediction");
-const autoTradeSignals = document.getElementById("auto-trade-signals");
 const predictionResultPanel = document.getElementById("prediction-result-panel");
 const predDirectionCard = document.getElementById("pred-direction-card");
 const predConfidenceTag = document.getElementById("pred-confidence-tag");
