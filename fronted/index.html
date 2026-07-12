@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MarketApp Fronted</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <button class="brand" data-view="overview" type="button">
+          <span class="brand-mark">MA</span>
+          <span>
+            <strong>MarketApp</strong>
+            <small>Trading console</small>
+          </span>
+        </button>
+
+        <nav class="nav" aria-label="Navegación principal">
+          <button class="nav-item is-active" data-view="overview" type="button">Resumen</button>
+          <button class="nav-item" data-view="xau" type="button">XAU Scalp</button>
+          <button class="nav-item" data-view="market" type="button">Predicciones</button>
+          <button class="nav-item" data-view="opening" type="button">Opening</button>
+          <button class="nav-item" data-view="analytics" type="button">Analítica</button>
+          <button class="nav-item" data-view="backfill" type="button">Backfill</button>
+          <a class="nav-item" href="./forexcom.html" style="text-decoration: none; display: block; text-align: left;">Forex.com (StoneX)</a>
+          <a class="nav-item" href="./oanda.html" style="text-decoration: none; display: block; text-align: left;">OANDA</a>
+          <a class="nav-item" href="./xpro.html" style="text-decoration: none; display: block; text-align: left;">XPRO Terminal</a>
+        </nav>
+
+        <form class="panel compact automation-card" id="automation-form">
+          <div class="automation-header">
+            <div>
+              <p class="eyebrow">Auto</p>
+              <strong>Automatización</strong>
+            </div>
+            <span class="badge pending" id="automation-status">OFF</span>
+          </div>
+
+          <label class="switch-row">
+            <input id="auto-evaluate" type="checkbox" />
+            <span>Evaluar auto al vencimiento</span>
+          </label>
+
+          <label class="switch-row">
+            <input id="auto-predict-xau" type="checkbox" />
+            <span>Predecir auto XAU</span>
+          </label>
+
+          <label>
+            Horizonte XAU auto
+            <input id="auto-xau-horizon" min="1" type="number" value="30" />
+          </label>
+
+          <label class="switch-row">
+            <input id="auto-predict-stocks" type="checkbox" />
+            <span>Predecir auto stocks</span>
+          </label>
+
+          <label>
+            Stocks auto
+            <input id="auto-stock-symbols" type="text" value="AAPL" />
+          </label>
+
+          <button class="button ghost full" type="submit">Guardar automatización</button>
+        </form>
+
+        <form class="panel compact" id="api-form">
+          <label for="api-base">Backend API</label>
+          <input id="api-base" name="apiBase" type="text" autocomplete="off" />
+          <button class="button secondary full" type="submit">Guardar API</button>
+        </form>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Dashboard operativo</p>
+            <h1>MarketApp</h1>
+          </div>
+          <div class="topbar-actions">
+            <span class="status-pill" id="api-status">API sin verificar</span>
+            <span class="clock" id="clock">--:--</span>
+            <button class="button secondary" id="refresh-all" type="button">Actualizar</button>
+          </div>
+        </header>
+
+        <section class="view is-active" id="view-overview">
+          <div class="hero-grid">
+            <article class="hero-card">
+              <p class="eyebrow">Estado</p>
+              <h2 id="overview-health-title">Conectando</h2>
+              <p id="overview-health-copy">Validando disponibilidad del backend.</p>
+            </article>
+            <article class="hero-card accent">
+              <p class="eyebrow">XAUUSD</p>
+              <h2 id="overview-xau-decision">Sin decisión</h2>
+              <p id="overview-xau-detail">Carga una sesión scalp para ver la señal agregada.</p>
+          </div>
+
+          <div class="panel-header" style="margin-bottom: 12px;">
+            <div>
+              <p class="eyebrow">Visualización de Mercado</p>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">Instrumento:</h3>
+                <select id="chart-symbol-select" style="background: #1e1e1e; color: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; font-size: 14px; font-weight: bold; cursor: pointer; outline: none;">
+                  <!-- Dynamically populated -->
+                </select>
+                <button class="button secondary" id="btn-add-symbol" type="button" style="padding: 4px 10px; font-size: 11px; height: 26px; line-height: 1;">+ Añadir</button>
+                <button class="button secondary" id="btn-remove-symbol" type="button" style="padding: 4px 10px; font-size: 11px; height: 26px; line-height: 1; color: #ef5350; border-color: #ef535033;">- Quitar</button>
+              </div>
+            </div>
+            <div class="toolbar" style="gap: 8px;">
+              <button class="button secondary is-active" id="btn-chart-local" type="button" style="padding: 6px 14px; font-size: 12px;">Gráfico Local (Offline)</button>
+              <button class="button secondary" id="btn-chart-tv" type="button" style="padding: 6px 14px; font-size: 12px;">TradingView (Online)</button>
+            </div>
+          </div>
+
+          <!-- TradingView Widget -->
+          <div class="panel" id="container-chart-tv" style="height: 480px; margin-bottom: 24px; padding: 0; overflow: hidden; border-radius: 8px; border: 1px solid var(--border); display: none;">
+            <iframe 
+              src="https://www.tradingview.com/widgetembed/?symbol=FX:XAUUSD&interval=5&theme=dark&style=1&timezone=Etc%2FUTC&locale=es&enablepublishing=false&allowsymbolchange=true&hidesidetoolbar=false" 
+              width="100%" 
+              height="100%" 
+              style="border: none; margin: 0; padding: 0; display: block;"
+              title="TradingView Chart">
+            </iframe>
+          </div>
+
+          <!-- Unified TradingView Lightweight Charts Container -->
+          <div class="panel" id="container-chart-local" style="height: 480px; margin-bottom: 24px; display: flex; flex-direction: column; border-radius: 8px; border: 1px solid var(--border); background: #121212; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span id="chart-info-label" style="font-size: 12px; color: #888;">Gráfico Interactivo de TradingView (Local)</span>
+              <span id="local-chart-price" style="font-size: 14px; font-weight: bold; color: var(--accent);">--</span>
+            </div>
+            <div id="local-chart-svg-container" style="flex: 1; width: 100%; height: 100%;">
+              <div class="empty-state">Cargando gráfico local...</div>
+            </div>
+          </div>
+
+          <div class="grid two">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Scalp</p>
+                  <h3>Rendimiento XAU</h3>
+                </div>
+              </div>
+              <div id="overview-xau-stats" class="empty-state">Sin datos cargados.</div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Mercado</p>
+                  <h3>Predicciones recientes</h3>
+                </div>
+              </div>
+              <div id="overview-predictions" class="empty-state">Sin datos cargados.</div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-xau">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">XAUUSD scalp</p>
+              <h2>Predecir movimiento XAU/USD</h2>
+              <p>Genera una predicción scalp, consulta la sesión actual y valida la decisión final.</p>
+            </div>
+            <div class="toolbar">
+              <label>
+                Horizonte
+                <input id="xau-horizon" type="number" min="1" value="30" />
+              </label>
+            </div>
+          </div>
+
+          <section class="predict-panel">
+            <div>
+              <p class="eyebrow">Acción principal</p>
+              <h3>Predecir movimiento de XAU/USD ahora</h3>
+              <p>Selecciona la señal scalp y haz clic en el botón principal. Esto llama al endpoint de predicción XAU/USD.</p>
+            </div>
+            <div class="predict-actions">
+              <label>
+                Señal
+                <select id="xau-auto-signal">
+                  <option value="SCALP_000">SCALP_000 · Inicio del bloque</option>
+                  <option value="SCALP_005">SCALP_005 · Confirmación temprana</option>
+                  <option value="SCALP_010">SCALP_010 · Momentum medio</option>
+                  <option value="SCALP_015">SCALP_015 · Cierre del bloque</option>
+                </select>
+              </label>
+              <button class="button primary large" id="xau-predict-now" type="button">Predecir XAU/USD</button>
+            </div>
+          </section>
+
+          <p class="manual-actions-label">O ejecuta una señal manual específica:</p>
+          <div class="action-grid">
+            <button class="action-card" data-signal="SCALP_000" type="button">
+              <span>Predecir SCALP_000</span>
+              <small>Inicio del bloque de 15 minutos</small>
+            </button>
+            <button class="action-card" data-signal="SCALP_005" type="button">
+              <span>Predecir SCALP_005</span>
+              <small>Confirmación temprana</small>
+            </button>
+            <button class="action-card" data-signal="SCALP_010" type="button">
+              <span>Predecir SCALP_010</span>
+              <small>Momentum medio</small>
+            </button>
+            <button class="action-card" data-signal="SCALP_015" type="button">
+              <span>Predecir SCALP_015</span>
+              <small>Cierre del bloque</small>
+            </button>
+          </div>
+
+          <div class="grid two">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Decisión</p>
+                  <h3>Filtro final</h3>
+                </div>
+                <button class="button secondary" id="xau-refresh-decision" type="button">Evaluar</button>
+              </div>
+              <div id="xau-decision-card" class="empty-state">Sin decisión cargada.</div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Última señal</p>
+                  <h3>Respuesta del modelo</h3>
+                </div>
+              </div>
+              <div id="xau-last-prediction" class="empty-state">Ejecuta una señal para ver el detalle.</div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Sesión</p>
+                <h3>Señales registradas</h3>
+              </div>
+              <div class="toolbar">
+                <input id="xau-session-id" placeholder="session_id opcional" type="text" />
+                <button class="button secondary" id="xau-refresh-session" type="button">Cargar sesión</button>
+              </div>
+            </div>
+            <div id="xau-session-table" class="empty-state">Sin sesión cargada.</div>
+          </section>
+        </section>
+
+        <section class="view" id="view-market">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Predicciones generales</p>
+              <h2>Mercado 4h</h2>
+              <p>Genera predicciones por símbolo y revisa histórico, resultados y estadísticas.</p>
+            </div>
+          </div>
+
+          <form class="panel form-row" id="market-predict-form">
+            <label>
+              Símbolo
+              <input id="market-symbol" type="text" value="AAPL" />
+            </label>
+            <button class="button primary" type="submit">Crear predicción</button>
+            <button class="button secondary" id="market-load-predictions" type="button">Histórico</button>
+            <button class="button secondary" id="market-load-stats" type="button">Estadísticas</button>
+            <button class="button secondary" id="market-load-results" type="button">Resultados</button>
+            <button class="button ghost" id="market-run-backtest" type="button">Backtest</button>
+          </form>
+
+          <div class="grid two">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Salida</p>
+                  <h3>Predicción actual</h3>
+                </div>
+              </div>
+              <div id="market-current" class="empty-state">Sin predicción cargada.</div>
+            </section>
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Datos</p>
+                  <h3>Consulta</h3>
+                </div>
+              </div>
+              <div id="market-data" class="empty-state">Selecciona una consulta.</div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-opening">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Opening confirmation</p>
+              <h2>Confirmación de apertura</h2>
+              <p>Ejecuta las señales programadas y calcula la decisión agregada.</p>
+            </div>
+          </div>
+
+          <div class="panel form-row">
+            <label>
+              Símbolo
+              <input id="opening-symbol" type="text" value="AAPL" />
+            </label>
+            <label>
+              Fecha
+              <input id="opening-date" type="date" />
+            </label>
+            <button class="button secondary" id="opening-load-session" type="button">Sesión</button>
+            <button class="button secondary" id="opening-load-decision" type="button">Decisión</button>
+          </div>
+
+          <div class="action-grid three">
+            <button class="action-card" data-opening-signal="OPENING_0800" type="button">
+              <span>OPENING_0800</span>
+              <small>Primera lectura</small>
+            </button>
+            <button class="action-card" data-opening-signal="OPENING_0815" type="button">
+              <span>OPENING_0815</span>
+              <small>Confirmación</small>
+            </button>
+            <button class="action-card" data-opening-signal="OPENING_0830" type="button">
+              <span>OPENING_0830</span>
+              <small>Peso principal</small>
+            </button>
+          </div>
+
+          <div class="grid two">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Decisión</p>
+                  <h3>Opening</h3>
+                </div>
+              </div>
+              <div id="opening-decision" class="empty-state">Sin decisión cargada.</div>
+            </section>
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Sesión</p>
+                  <h3>Señales</h3>
+                </div>
+              </div>
+              <div id="opening-session" class="empty-state">Sin sesión cargada.</div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-analytics">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Analítica XAU</p>
+              <h2>Segmentación de resultados</h2>
+              <p>Consulta agrupaciones del backtesting y rendimiento real por filtro.</p>
+            </div>
+            <div class="toolbar">
+              <select id="analytics-group">
+                <option value="by-session">Por sesión</option>
+                <option value="by-quality">Por calidad</option>
+                <option value="by-adx">Por ADX</option>
+                <option value="by-atr">Por ATR</option>
+                <option value="by-hour">Por hora</option>
+                <option value="tpsl">TP / SL</option>
+                <option value="tpsl-by-hour">TP / SL por hora</option>
+                <option value="tpsl-by-quality">TP / SL por calidad</option>
+                <option value="tpsl-by-session">TP / SL por sesión</option>
+                <option value="tpsl-by-adx">TP / SL por ADX</option>
+                <option value="tpsl-by-atr">TP / SL por ATR</option>
+                <option value="by-smart-filter">Smart filter</option>
+              </select>
+              <button class="button secondary" id="analytics-load" type="button">Cargar</button>
+            </div>
+          </div>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Resultados</p>
+                <h3 id="analytics-title">Por sesión</h3>
+              </div>
+            </div>
+            <div id="analytics-table" class="empty-state">Sin consulta cargada.</div>
+          </section>
+        </section>
+
+        <section class="view" id="view-backfill">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Procesos</p>
+              <h2>Backfill y backtesting</h2>
+              <p>Ejecuta cargas históricas controladas. Estas acciones pueden tardar.</p>
+            </div>
+          </div>
+
+          <div class="grid two">
+            <form class="panel stacked" id="backfill-stocks-form">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Stocks</p>
+                  <h3>Backfill general</h3>
+                </div>
+              </div>
+              <label>
+                Símbolos separados por coma
+                <input id="backfill-symbols" type="text" value="AAPL,MSFT" />
+              </label>
+              <div class="inline-fields">
+                <label>Días <input id="backfill-days" min="1" type="number" value="7" /></label>
+                <label>Step <input id="backfill-step" min="1" type="number" value="4" /></label>
+                <label>Horizonte <input id="backfill-horizon" min="1" type="number" value="16" /></label>
+              </div>
+              <button class="button primary" type="submit">Ejecutar stocks</button>
+            </form>
+
+            <form class="panel stacked" id="backfill-xau-form">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">XAUUSD</p>
+                  <h3>Backfill scalp</h3>
+                </div>
+              </div>
+              <div class="inline-fields">
+                <label>Días <input id="backfill-xau-days" min="1" type="number" value="7" /></label>
+                <label>Step <input id="backfill-xau-step" min="1" type="number" value="3" /></label>
+                <label>Horizonte <input id="backfill-xau-horizon" min="1" type="number" value="6" /></label>
+              </div>
+              <button class="button primary" type="submit">Ejecutar XAU</button>
+            </form>
+          </div>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Salida</p>
+                <h3>Resultado del proceso</h3>
+              </div>
+              <button class="button ghost" id="xau-run-backtest" type="button">Backtest XAU</button>
+            </div>
+            <div id="backfill-output" class="empty-state">Sin proceso ejecutado.</div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+    <script src="./lightweight-charts.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

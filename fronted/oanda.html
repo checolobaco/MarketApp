@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Terminal OANDA - MarketApp</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      .status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+      }
+      .status-dot.disconnected {
+        background-color: var(--danger);
+      }
+      .status-dot.connected {
+        background-color: var(--success);
+      }
+      .grid-layout {
+        display: grid;
+        grid-template-columns: 340px 1fr;
+        gap: 20px;
+      }
+      .panel-section {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+      .table-wrapper {
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .trading-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 20px;
+      }
+      .btn-buy {
+        background: var(--success);
+        color: #000;
+        font-weight: bold;
+      }
+      .btn-buy:hover {
+        background: #a3e895;
+      }
+      .btn-sell {
+        background: var(--danger);
+        color: #fff;
+        font-weight: bold;
+      }
+      .btn-sell:hover {
+        background: #ff91a4;
+      }
+      .clickable-row {
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+      .clickable-row:hover {
+        background: var(--surface-soft);
+      }
+      .selected-market-header {
+        background: linear-gradient(135deg, rgba(124, 221, 199, 0.12), rgba(66, 196, 167, 0.03));
+        border: 1px solid var(--accent);
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="./index.html" style="text-decoration: none;">
+          <span class="brand-mark">MA</span>
+          <span>
+            <strong>MarketApp</strong>
+            <small>Trading console</small>
+          </span>
+        </a>
+
+        <nav class="nav" aria-label="Navegación principal">
+          <a class="nav-item" href="./index.html" style="text-decoration: none;">Dashboard principal</a>
+          <a class="nav-item" href="./forexcom.html" style="text-decoration: none;">Forex.com (StoneX)</a>
+          <button class="nav-item is-active" type="button">OANDA Terminal</button>
+          <a class="nav-item" href="./xpro.html" style="text-decoration: none;">XPRO Terminal</a>
+        </nav>
+
+        <div class="panel compact" style="margin-top: auto;">
+          <p class="eyebrow">Información del API</p>
+          <small class="muted">Conexión a través del Proxy Express local en /api/oanda</small>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Terminal Integrada</p>
+            <h1>OANDA Broker API</h1>
+          </div>
+          <div class="topbar-actions">
+            <span class="status-pill" id="session-status">
+              <span class="status-dot disconnected" id="session-status-dot"></span>
+              <span id="session-status-text">Desconectado</span>
+            </span>
+            <button class="button secondary" id="btn-refresh-data" style="display: none;">Actualizar Todo</button>
+          </div>
+        </header>
+
+        <div class="grid-layout">
+          <!-- Columna izquierda: Credenciales y Cuenta -->
+          <div class="panel-section">
+            <!-- Autenticación -->
+            <section class="panel" id="auth-panel">
+              <h3>Conexión OANDA</h3>
+              <form id="oanda-login-form">
+                <label>
+                  Entorno
+                  <select id="oanda-env">
+                    <option value="demo" selected>Practice (Demo)</option>
+                    <option value="live">Live (Real)</option>
+                  </select>
+                </label>
+                <label>
+                  Token de Acceso (Personal Access Token)
+                  <input type="password" id="oanda-token" required placeholder="Ingresa tu Token de OANDA" />
+                </label>
+                <label>
+                  ID de Cuenta (Account ID)
+                  <input type="text" id="oanda-accountid" required placeholder="Ej: 101-002-XXXXXXX-001" />
+                </label>
+                <button class="button primary full" type="submit" id="btn-connect" style="margin-top: 8px;">Conectar Cuenta</button>
+                <button class="button danger full" type="button" id="btn-disconnect" style="display: none; margin-top: 8px;">Desconectar</button>
+              </form>
+            </section>
+
+            <!-- Datos de la Cuenta -->
+            <section class="panel" id="account-panel" style="display: none;">
+              <h3>Resumen de Cuenta</h3>
+              <div style="display: grid; gap: 8px;">
+                <div>
+                  <small class="muted">Alias / ID</small>
+                  <div id="acc-id" style="font-weight: bold; font-size: 1.0em; overflow-wrap: break-word;">--</div>
+                </div>
+                <div>
+                  <small class="muted">Balance</small>
+                  <div id="acc-balance" style="font-weight: bold; color: var(--accent); font-size: 1.2em;">--</div>
+                </div>
+                <div>
+                  <small class="muted">Equidad (NAV)</small>
+                  <div id="acc-equity" style="font-weight: bold; font-size: 1.1em;">--</div>
+                </div>
+                <div>
+                  <small class="muted">Margen Utilizado / Disponible</small>
+                  <div id="acc-margin" style="font-size: 0.9em;">--</div>
+                </div>
+                <div>
+                  <small class="muted">PnL No Realizado</small>
+                  <div id="acc-unrealized-pnl" style="font-weight: bold; font-size: 1.1em;">--</div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- Columna derecha: Instrumentos, Velas, Operaciones -->
+          <div class="panel-section">
+            <section class="panel">
+              <h3>Instrumentos Disponibles</h3>
+              <div class="inline-fields" style="gap: 12px; margin-bottom: 15px; display: flex;">
+                <input type="text" id="market-search-query" value="XAU_USD" placeholder="Ej: EUR_USD, XAU_USD, GBP_USD" style="flex: 1;" />
+                <button class="button primary" id="btn-search-markets">Consultar Instrumento</button>
+              </div>
+
+              <div class="table-wrapper">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                  <thead>
+                    <tr style="border-bottom: 1px solid var(--border);">
+                      <th style="padding: 12px;">Nombre</th>
+                      <th style="padding: 12px;">Tipo</th>
+                      <th style="padding: 12px;">Pip Size / Precisión</th>
+                    </tr>
+                  </thead>
+                  <tbody id="markets-table-body">
+                    <tr>
+                      <td colspan="3" class="muted" style="padding: 16px; text-align: center;">
+                        Conéctate y busca un instrumento para comenzar
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <!-- Sección de mercado seleccionado -->
+            <div id="selected-market-area" style="display: none;">
+              <div class="selected-market-header">
+                <span class="eyebrow">Instrumento Seleccionado</span>
+                <h2 id="selected-market-name" style="margin: 4px 0 0 0;">--</h2>
+              </div>
+
+              <div class="trading-grid">
+                <!-- Velas / Histórico -->
+                <section class="panel">
+                  <h3>Velas de Precio (Últimas 10)</h3>
+                  <div class="table-wrapper">
+                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                      <thead>
+                        <tr style="border-bottom: 1px solid var(--border);">
+                          <th style="padding: 8px;">Fecha/Hora</th>
+                          <th style="padding: 8px;">Open</th>
+                          <th style="padding: 8px;">High</th>
+                          <th style="padding: 8px;">Low</th>
+                          <th style="padding: 8px;">Close</th>
+                        </tr>
+                      </thead>
+                      <tbody id="candles-table-body">
+                        <tr>
+                          <td colspan="5" class="muted" style="padding: 12px; text-align: center;">
+                            Cargando velas...
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <!-- Panel Operativo -->
+                <section class="panel">
+                  <h3>Nueva Orden de Mercado</h3>
+                  <form id="order-form">
+                    <label>
+                      Cantidad (Unidades)
+                      <input type="number" id="order-qty" value="1" min="1" step="1" required />
+                      <small class="muted" style="display: block; margin-top: 4px;">Por ejemplo: 1 para oro, 1000 para divisas (micro lote)</small>
+                    </label>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
+                      <label>
+                        Stop Loss (Precio)
+                        <input type="number" id="order-sl" placeholder="Opcional" step="0.00001" />
+                      </label>
+                      <label>
+                        Take Profit (Precio)
+                        <input type="number" id="order-tp" placeholder="Opcional" step="0.00001" />
+                      </label>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; margin-top: 15px;">
+                      <button class="button btn-sell full" type="button" id="btn-order-sell">VENDER (Sell)</button>
+                      <button class="button btn-buy full" type="button" id="btn-order-buy">COMPRAR (Buy)</button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            </div>
+
+            <!-- Posiciones Abiertas / Trades Activos -->
+            <section class="panel" id="positions-section" style="display: none; margin-top: 20px;">
+              <h3>Operaciones Activas (Trades)</h3>
+              <div class="table-wrapper">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                  <thead>
+                    <tr style="border-bottom: 1px solid var(--border);">
+                      <th style="padding: 12px;">ID Trade</th>
+                      <th style="padding: 12px;">Instrumento</th>
+                      <th style="padding: 12px;">Unidades</th>
+                      <th style="padding: 12px;">Precio Entrada</th>
+                      <th style="padding: 12px;">Unrealized PnL</th>
+                    </tr>
+                  </thead>
+                  <tbody id="positions-table-body">
+                    <tr>
+                      <td colspan="5" class="muted" style="padding: 16px; text-align: center;">
+                        No hay operaciones abiertas
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="./oanda.js" type="module"></script>
+  </body>
+</html>

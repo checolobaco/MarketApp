@@ -1,0 +1,619 @@
+{
+  "info": {
+    "name": "GainCapital StoneX - Cerrar posiciones por OrderId V2 FIX",
+    "description": "Colección Postman para cerrar posiciones abiertas indicando solamente el OrderId. Flujo: Login v2 -> Listar posiciones abiertas -> Guardar posiciones -> Escribir target_order_id -> Obtener precio/AuditId -> Enviar newtradeorder en dirección contraria. Ajusta baseUrl, credenciales y rutas si tu ambiente usa paths diferentes.\n\nV2 FIX: los scripts leen variables con pm.variables.get (Environment o Collection) y guardan valores en Collection Variables, para evitar errores cuando no hay Environment activo.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Script global vacío. Los scripts importantes están dentro de cada request."
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Tests globales vacíos."
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Login v2 - guardar Session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"UserName\": \"{{username}}\",\n  \"Password\": \"{{password}}\",\n  \"AppKey\": \"{{appKey}}\",\n  \"AppVersion\": \"{{appVersion}}\",\n  \"AppComments\": \"{{appComments}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/v2/Session",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v2",
+            "Session"
+          ]
+        },
+        "description": "Hace login y guarda la sesión. Si tu ambiente usa /TradingAPI/session o /session, cambia la URL."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login respondió 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "let json = {};",
+              "try { json = pm.response.json(); } catch (e) { console.log('No JSON response', e); }",
+              "const session = json.Session || json.session || json.SessionId || json.sessionId || json.AuthToken || json.Token || (json.Data && (json.Data.Session || json.Data.SessionId));",
+              "if (session) {",
+              "  pm.collectionVariables.set('session', session);",
+              "  console.log('Session guardada:', session);",
+              "} else {",
+              "  console.warn('No encontré Session automáticamente. Revisa la respuesta y guarda manualmente la variable session.');",
+              "}",
+              "const userName = json.UserName || json.username || pm.environment.get('username');",
+              "if (userName) pm.collectionVariables.set('username', userName);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Listar posiciones abiertas",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "UserName",
+            "value": "{{username}}"
+          },
+          {
+            "key": "Session",
+            "value": "{{session}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/TradingAPI/order/openpositions?TradingAccountId={{tradingAccountId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "TradingAPI",
+            "order",
+            "openpositions"
+          ],
+          "query": [
+            {
+              "key": "TradingAccountId",
+              "value": "{{tradingAccountId}}"
+            }
+          ]
+        },
+        "description": "Trae posiciones abiertas de la cuenta. Si tu endpoint responde con data.OpenPositions, OpenPositions o Positions, el test las guarda automáticamente."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Open positions respondió 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "let json = {};",
+              "try { json = pm.response.json(); } catch (e) { throw new Error('Respuesta no es JSON'); }",
+              "const positions = (json.data && json.data.OpenPositions) || json.OpenPositions || json.Positions || (json.Data && json.Data.OpenPositions) || [];",
+              "pm.collectionVariables.set('open_positions_json', JSON.stringify(positions));",
+              "console.log('Posiciones abiertas guardadas:', positions);",
+              "pm.test('Se guardó open_positions_json', function () { pm.expect(pm.variables.get('open_positions_json')).to.not.be.undefined; });",
+              "if (positions.length > 0) {",
+              "  console.log('OrderIds disponibles:', positions.map(p => p.OrderId));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Configurar OrderId a cerrar - manual",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://postman-echo.com/get?target_order_id={{target_order_id}}",
+          "protocol": "https",
+          "host": [
+            "postman-echo",
+            "com"
+          ],
+          "path": [
+            "get"
+          ],
+          "query": [
+            {
+              "key": "target_order_id",
+              "value": "{{target_order_id}}"
+            }
+          ]
+        },
+        "description": "Antes de ejecutar el cierre, escribe en variables de Environment el OrderId que quieres cerrar en target_order_id. Este request solo valida que exista la variable."
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const target = String(pm.variables.get('target_order_id') || '').trim();",
+              "if (!target || target === 'PEGAR_ORDER_ID_A_CERRAR') {",
+              "  throw new Error('Falta target_order_id. Escríbelo en Collection Variables > Current value o en Environment activo. Ejemplo: 1023994812');",
+              "}",
+              "pm.collectionVariables.set('target_order_id', target);",
+              "console.log('OrderId seleccionado para cerrar:', target);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('target_order_id está definido', function () {",
+              "  const target = String(pm.variables.get('target_order_id') || '').trim();",
+              "  pm.expect(target).to.not.be.empty;",
+              "  pm.expect(target).to.not.eql('PEGAR_ORDER_ID_A_CERRAR');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Preparar cierre por OrderId",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://postman-echo.com/get?prepared=true",
+          "protocol": "https",
+          "host": [
+            "postman-echo",
+            "com"
+          ],
+          "path": [
+            "get"
+          ],
+          "query": [
+            {
+              "key": "prepared",
+              "value": "true"
+            }
+          ]
+        },
+        "description": "Busca target_order_id dentro de open_positions_json y calcula: MarketId, Quantity, TradingAccountId y Direction contraria."
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const targetRaw = pm.variables.get('target_order_id');",
+              "if (!targetRaw) throw new Error('Falta variable target_order_id.');",
+              "const target = String(targetRaw).trim();",
+              "let positions = [];",
+              "try { positions = JSON.parse(pm.variables.get('open_positions_json') || '[]'); } catch (e) { throw new Error('open_positions_json no es JSON válido. Ejecuta primero 02 - Listar posiciones abiertas.'); }",
+              "const pos = positions.find(p => String(p.OrderId) === target);",
+              "if (!pos) {",
+              "  console.log('Posiciones disponibles:', positions.map(p => ({ OrderId: p.OrderId, MarketName: p.MarketName, Direction: p.Direction, Quantity: p.Quantity })));",
+              "  throw new Error('No encontré el OrderId ' + target + ' en open_positions_json. Ejecuta primero Listar posiciones abiertas o revisa target_order_id.');",
+              "}",
+              "const currentDirection = String(pos.Direction || '').toLowerCase();",
+              "let closeDirection = '';",
+              "if (currentDirection === 'buy') closeDirection = 'sell';",
+              "if (currentDirection === 'sell') closeDirection = 'buy';",
+              "if (!closeDirection) throw new Error('Direction inválida en posición: ' + pos.Direction);",
+              "pm.collectionVariables.set('close_original_order_id', String(pos.OrderId));",
+              "pm.collectionVariables.set('close_market_id', String(pos.MarketId));",
+              "pm.collectionVariables.set('close_market_name', pos.MarketName || '');",
+              "pm.collectionVariables.set('close_quantity', String(pos.Quantity));",
+              "pm.collectionVariables.set('close_trading_account_id', String(pos.TradingAccountId || pm.environment.get('tradingAccountId')));",
+              "pm.collectionVariables.set('close_direction', closeDirection);",
+              "pm.collectionVariables.set('close_original_direction', currentDirection);",
+              "console.log('Preparado cierre:', {",
+              "  originalOrderId: pos.OrderId,",
+              "  marketId: pos.MarketId,",
+              "  marketName: pos.MarketName,",
+              "  originalDirection: currentDirection,",
+              "  closeDirection,",
+              "  quantity: pos.Quantity,",
+              "  tradingAccountId: pos.TradingAccountId",
+              "});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Variables de cierre preparadas', function () {",
+              "  pm.expect(pm.variables.get('close_market_id')).to.not.be.empty;",
+              "  pm.expect(pm.variables.get('close_direction')).to.be.oneOf(['buy', 'sell']);",
+              "  pm.expect(pm.variables.get('close_quantity')).to.not.be.empty;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Obtener precio actual y AuditId",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "UserName",
+            "value": "{{username}}"
+          },
+          {
+            "key": "Session",
+            "value": "{{session}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/TradingAPI/market/price/{{close_market_id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "TradingAPI",
+            "market",
+            "price",
+            "{{close_market_id}}"
+          ]
+        },
+        "description": "Obtiene Bid, Offer y AuditId para el MarketId que se va a cerrar. Si tu API usa otro endpoint de price, cambia esta URL, pero deja el test para capturar Bid/Offer/AuditId."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Price respondió 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "let json = {};",
+              "try { json = pm.response.json(); } catch (e) { throw new Error('Respuesta de price no es JSON'); }",
+              "const p = json.Price || json.price || json.Data || json.data || json;",
+              "const bid = p.Bid || p.BidPrice || p.bid || p.bidPrice || (p.Snapshot && (p.Snapshot.Bid || p.Snapshot.BidPrice));",
+              "const offer = p.Offer || p.OfferPrice || p.offer || p.offerPrice || (p.Snapshot && (p.Snapshot.Offer || p.Snapshot.OfferPrice));",
+              "const auditId = p.AuditId || p.auditId || p.AuditID || p.PriceAuditId || p.priceAuditId || (p.Snapshot && (p.Snapshot.AuditId || p.Snapshot.PriceAuditId));",
+              "if (bid !== undefined && bid !== null) pm.collectionVariables.set('close_bid_price', String(bid));",
+              "if (offer !== undefined && offer !== null) pm.collectionVariables.set('close_offer_price', String(offer));",
+              "if (auditId !== undefined && auditId !== null) pm.collectionVariables.set('close_audit_id', String(auditId));",
+              "console.log('Precio capturado:', { bid, offer, auditId, raw: json });",
+              "pm.test('Bid/Offer capturados', function () {",
+              "  pm.expect(pm.variables.get('close_bid_price')).to.not.be.empty;",
+              "  pm.expect(pm.variables.get('close_offer_price')).to.not.be.empty;",
+              "});",
+              "if (!pm.variables.get('close_audit_id')) {",
+              "  console.warn('No se capturó AuditId. Algunas cuentas/API lo exigen para newtradeorder. Revisa respuesta de price.');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - CERRAR posición seleccionada - newtradeorder",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "UserName",
+            "value": "{{username}}"
+          },
+          {
+            "key": "Session",
+            "value": "{{session}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"IfDone\": [],\n  \"Direction\": \"{{close_direction}}\",\n  \"MarketId\": {{close_market_id}},\n  \"TradingAccountId\": {{close_trading_account_id}},\n  \"Quantity\": {{close_quantity}},\n  \"BidPrice\": {{close_bid_price}},\n  \"OfferPrice\": {{close_offer_price}},\n  \"AuditId\": \"{{close_audit_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/TradingAPI/order/newtradeorder",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "TradingAPI",
+            "order",
+            "newtradeorder"
+          ]
+        },
+        "description": "Cierra la posición enviando una nueva orden de mercado en dirección contraria. Este request debe generar un OrderId nuevo. Si devuelve OrderId 0 o Status 10, fue rechazado."
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const required = ['close_direction','close_market_id','close_trading_account_id','close_quantity','close_bid_price','close_offer_price'];",
+              "required.forEach(k => { if (!pm.variables.get(k)) throw new Error('Falta variable ' + k + '. Ejecuta los requests 02, 04 y 05 antes de cerrar.'); });",
+              "console.log('Enviando cierre:', {",
+              "  originalOrderId: pm.variables.get('close_original_order_id'),",
+              "  marketName: pm.variables.get('close_market_name'),",
+              "  marketId: pm.variables.get('close_market_id'),",
+              "  originalDirection: pm.environment.get('close_original_direction'),",
+              "  closeDirection: pm.variables.get('close_direction'),",
+              "  quantity: pm.variables.get('close_quantity'),",
+              "  bid: pm.variables.get('close_bid_price'),",
+              "  offer: pm.variables.get('close_offer_price'),",
+              "  auditId: pm.variables.get('close_audit_id')",
+              "});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "let json = {};",
+              "try { json = pm.response.json(); } catch (e) { console.log('Respuesta no JSON', e); }",
+              "const orderId = json.OrderId || json.orderId || (json.Data && json.Data.OrderId);",
+              "const status = json.Status || json.status;",
+              "const statusReason = json.StatusReason || json.statusReason;",
+              "console.log('Respuesta cierre:', json);",
+              "pm.test('HTTP respondió', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "pm.test('Debe crear OrderId nuevo distinto de 0', function () {",
+              "  pm.expect(Number(orderId || 0), 'OrderId').to.be.above(0);",
+              "});",
+              "if (orderId && Number(orderId) > 0) {",
+              "  pm.collectionVariables.set('last_close_order_id', String(orderId));",
+              "}",
+              "if (!orderId || Number(orderId) === 0) {",
+              "  console.error('Orden rechazada. Status:', status, 'StatusReason:', statusReason, 'Body enviado:', pm.request.body.raw);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Verificar que la posición ya no esté abierta",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "UserName",
+            "value": "{{username}}"
+          },
+          {
+            "key": "Session",
+            "value": "{{session}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/TradingAPI/order/openpositions?TradingAccountId={{tradingAccountId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "TradingAPI",
+            "order",
+            "openpositions"
+          ],
+          "query": [
+            {
+              "key": "TradingAccountId",
+              "value": "{{tradingAccountId}}"
+            }
+          ]
+        },
+        "description": "Vuelve a listar posiciones y valida si el target_order_id desapareció."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "let json = {};",
+              "try { json = pm.response.json(); } catch (e) { throw new Error('Respuesta no es JSON'); }",
+              "const positions = (json.data && json.data.OpenPositions) || json.OpenPositions || json.Positions || (json.Data && json.Data.OpenPositions) || [];",
+              "pm.collectionVariables.set('open_positions_json', JSON.stringify(positions));",
+              "const target = String(pm.variables.get('target_order_id') || '').trim();",
+              "const stillOpen = positions.find(p => String(p.OrderId) === target);",
+              "console.log('Posiciones actuales:', positions);",
+              "pm.test('La posición objetivo ya no aparece por OrderId original', function () {",
+              "  pm.expect(stillOpen, 'Posición sigue abierta').to.be.undefined;",
+              "});",
+              "if (stillOpen) {",
+              "  console.warn('La posición aún aparece abierta:', stillOpen);",
+              "} else {",
+              "  console.log('La posición objetivo ya no aparece abierta:', target);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "UTIL - Cierre manual si falla el automático",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "UserName",
+            "value": "{{username}}"
+          },
+          {
+            "key": "Session",
+            "value": "{{session}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"IfDone\": [],\n  \"Direction\": \"buy\",\n  \"MarketId\": 100537,\n  \"TradingAccountId\": 407879128,\n  \"Quantity\": 1,\n  \"BidPrice\": 0,\n  \"OfferPrice\": 0,\n  \"AuditId\": \"PEGAR_AUDIT_ID_DEL_ENDPOINT_PRICE\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/TradingAPI/order/newtradeorder",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "TradingAPI",
+            "order",
+            "newtradeorder"
+          ]
+        },
+        "description": "Plantilla manual. Úsala solo si necesitas probar campos a mano. Para cerrar SELL usa Direction BUY. Para cerrar BUY usa Direction SELL."
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://ciapi.cityindex.com",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "TU_USUARIO",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "TU_PASSWORD",
+      "type": "string"
+    },
+    {
+      "key": "appKey",
+      "value": "TU_APP_KEY",
+      "type": "string"
+    },
+    {
+      "key": "appVersion",
+      "value": "1.0",
+      "type": "string"
+    },
+    {
+      "key": "appComments",
+      "value": "Postman close position collection",
+      "type": "string"
+    },
+    {
+      "key": "session",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tradingAccountId",
+      "value": "407879128",
+      "type": "string"
+    },
+    {
+      "key": "target_order_id",
+      "value": "PEGAR_ORDER_ID_A_CERRAR",
+      "type": "string"
+    },
+    {
+      "key": "open_positions_json",
+      "value": "[]",
+      "type": "string"
+    },
+    {
+      "key": "close_original_order_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "close_market_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "close_market_name",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "close_original_direction",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "close_direction",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "close_quantity",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "close_trading_account_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "close_bid_price",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "close_offer_price",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "close_audit_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "last_close_order_id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

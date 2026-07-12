@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Terminal Forex.com (StoneX) - MarketApp</title>
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      .status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+      }
+      .status-dot.disconnected {
+        background-color: var(--danger);
+      }
+      .status-dot.connected {
+        background-color: var(--success);
+      }
+      .grid-layout {
+        display: grid;
+        grid-template-columns: 340px 1fr;
+        gap: 20px;
+      }
+      .panel-section {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+      .table-wrapper {
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.02);
+        margin-bottom: 15px;
+      }
+      .trading-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 20px;
+      }
+      .btn-buy {
+        background: var(--success);
+        color: #000;
+        font-weight: bold;
+      }
+      .btn-buy:hover {
+        background: #a3e895;
+      }
+      .btn-sell {
+        background: var(--danger);
+        color: #fff;
+        font-weight: bold;
+      }
+      .btn-sell:hover {
+        background: #ff91a4;
+      }
+      .clickable-row {
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+      .clickable-row:hover {
+        background: var(--surface-soft);
+      }
+      .selected-market-header {
+        background: linear-gradient(135deg, rgba(124, 221, 199, 0.12), rgba(66, 196, 167, 0.03));
+        border: 1px solid var(--accent);
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 20px;
+      }
+      .badge-buy {
+        background: rgba(46, 204, 113, 0.15);
+        color: #2ecc71;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: bold;
+      }
+      .badge-sell {
+        background: rgba(231, 76, 60, 0.15);
+        color: #e74c3c;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: bold;
+      }
+      /* Modal Styles */
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(5px);
+        z-index: 2000;
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-content {
+        background: #111827;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 24px;
+        width: 420px;
+        box-shadow: var(--shadow);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="./index.html" style="text-decoration: none;">
+          <span class="brand-mark">MA</span>
+          <span>
+            <strong>MarketApp</strong>
+            <small>Trading console</small>
+          </span>
+        </a>
+
+        <nav class="nav" aria-label="Navegación principal">
+          <a class="nav-item" href="./index.html" style="text-decoration: none;">Dashboard principal</a>
+          <button class="nav-item is-active" type="button">Forex.com (StoneX)</button>
+          <a class="nav-item" href="./oanda.html" style="text-decoration: none;">OANDA Terminal</a>
+          <a class="nav-item" href="./xpro.html" style="text-decoration: none;">XPRO Terminal</a>
+        </nav>
+
+        <div class="panel compact" style="margin-top: auto;">
+          <p class="eyebrow">Información del API</p>
+          <small class="muted">Conexión a través del Proxy Express local en /api/forexcom</small>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Terminal Integrada</p>
+            <h1>Forex.com (StoneX) Broker API</h1>
+          </div>
+          <div class="topbar-actions">
+            <span class="status-pill" id="session-status">
+              <span class="status-dot disconnected" id="session-status-dot"></span>
+              <span id="session-status-text">Desconectado</span>
+              <span id="session-status-text">https://docs.labs.gaincapital.com/</span>
+
+            </span>
+            <button class="button secondary" id="btn-refresh-data" style="display: none;">Actualizar Todo</button>
+          </div>
+        </header>
+
+        <div class="grid-layout">
+          <!-- Columna izquierda: Credenciales y Cuenta -->
+          <div class="panel-section">
+            <!-- Autenticación -->
+            <section class="panel" id="auth-panel">
+              <h3>Conexión Forex.com</h3>
+              <form id="forex-login-form">
+                <label>
+                  Entorno
+                  <select id="forex-env">
+                    <option value="demo">Demo (Preprod)</option>
+                    <option value="live" selected>Live (Production)</option>
+                  </select>
+                </label>
+                <label>
+                  UserName
+                  <input type="text" id="forex-username" required placeholder="Email o ID de usuario" />
+                </label>
+                <label>
+                  Password
+                  <input type="password" id="forex-password" required placeholder="Contraseña de trading" />
+                </label>
+                <label>
+                  AppKey
+                  <input type="password" id="forex-appkey" required placeholder="Application Key de StoneX" />
+                </label>
+                <button class="button primary full" type="submit" id="btn-connect" style="margin-top: 8px;">Conectar Sesión</button>
+                <button class="button danger full" type="button" id="btn-disconnect" style="display: none; margin-top: 8px;">Desconectar</button>
+              </form>
+            </section>
+
+            <!-- Datos de la Cuenta -->
+            <section class="panel" id="account-panel" style="display: none;">
+              <h3>Resumen de Cuenta</h3>
+              <div style="display: grid; gap: 8px;">
+                <div>
+                  <small class="muted">Balance</small>
+                  <div id="acc-balance" style="font-weight: bold; color: var(--accent); font-size: 1.2em;">--</div>
+                </div>
+                <div>
+                  <small class="muted">Equidad</small>
+                  <div id="acc-equity" style="font-weight: bold; font-size: 1.1em;">--</div>
+                </div>
+                <div>
+                  <small class="muted">Margen Utilizado / Libre</small>
+                  <div id="acc-margin" style="font-size: 0.9em;">--</div>
+                </div>
+                <div>
+                  <small class="muted">P&L Flotante</small>
+                  <div id="acc-unrealized-pnl" style="font-weight: bold; font-size: 1.1em;">--</div>
+                </div>
+                <div>
+                  <small class="muted">Apalancamiento</small>
+                  <div id="acc-leverage" style="font-size: 0.9em;">--</div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- Columna derecha: Instrumentos, Gráficos, Operaciones, Historial -->
+          <div class="panel-section">
+            <!-- Buscador y selector de mercados -->
+            <section class="panel">
+              <h3>Buscador de Mercados (CFD)</h3>
+              <select id="market-select" style="background: #1e1e1e; color: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 10px; width: 100%; margin-bottom: 12px; outline: none; display: none;">
+                <option value="">-- Selecciona un Mercado --</option>
+              </select>
+              <div class="inline-fields" style="gap: 12px; margin-bottom: 10px; display: flex;">
+                <input type="text" id="market-search-query" value="XAUUSD" placeholder="Ej: XAUUSD, EURUSD, AAPL" style="flex: 1;" />
+                <button class="button primary" id="btn-search-markets">Buscar Mercados</button>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px;">
+                <button class="button secondary" type="button" style="padding: 4px 8px; font-size: 11px; height: auto;" onclick="window.quickSearch('XAUUSD')">XAUUSD (Oro)</button>
+                <button class="button secondary" type="button" style="padding: 4px 8px; font-size: 11px; height: auto;" onclick="window.quickSearch('EURUSD')">EURUSD</button>
+                <button class="button secondary" type="button" style="padding: 4px 8px; font-size: 11px; height: auto;" onclick="window.quickSearch('GBPUSD')">GBPUSD</button>
+                <button class="button secondary" type="button" style="padding: 4px 8px; font-size: 11px; height: auto;" onclick="window.quickSearch('AAPL')">AAPL (Apple)</button>
+              </div>
+
+              <div class="table-wrapper">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                  <thead>
+                    <tr style="border-bottom: 1px solid var(--border);">
+                      <th style="padding: 12px;">Market ID</th>
+                      <th style="padding: 12px;">Mercado / Nombre</th>
+                      <th style="padding: 12px;">Bid / Ask</th>
+                    </tr>
+                  </thead>
+                  <tbody id="markets-table-body">
+                    <tr>
+                      <td colspan="3" class="muted" style="padding: 16px; text-align: center;">
+                        Conéctate y busca un mercado para comenzar
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <!-- Sección de mercado seleccionado -->
+            <div id="selected-market-area" style="display: none;">
+              <div class="selected-market-header">
+                <span class="eyebrow" id="selected-market-id-label">Market ID: --</span>
+                <h2 id="selected-market-name" style="margin: 4px 0 0 0;">--</h2>
+                <div id="selected-market-specs" style="margin-top: 8px; font-size: 0.9em;" class="muted"></div>
+              </div>
+
+              <!-- Gráfico de Análisis -->
+              <section class="panel" style="margin-bottom: 20px; padding: 12px; background: #121212;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                  <h3 style="margin: 0;">Gráfico de Análisis</h3>
+                  <div style="display: flex; gap: 8px;">
+                    <button class="button" id="btn-show-tv-chart" style="padding: 6px 12px; font-size: 0.85em;" type="button">TradingView Feed</button>
+                    <button class="button primary" id="btn-show-local-chart" style="padding: 6px 12px; font-size: 0.85em;" type="button">Gráfico Predictivo IA</button>
+                  </div>
+                </div>
+                
+                <div id="tv-chart-wrapper" style="height: 380px; width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid var(--border);">
+                  <iframe 
+                    id="tv-chart-iframe"
+                    src="" 
+                    width="100%" 
+                    height="100%" 
+                    style="border: none; margin: 0; padding: 0; display: block;"
+                    title="TradingView Chart">
+                  </iframe>
+                </div>
+
+                <div id="local-chart-wrapper" style="height: 380px; width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); display: none; background: #000; position: relative;">
+                  <div id="local-chart-container" style="width: 100%; height: 100%;"></div>
+                </div>
+              </section>
+
+              <div class="trading-grid">
+                <!-- Cotización -->
+                <section class="panel">
+                  <h3>Cotización y Especificación</h3>
+                  <div style="display: grid; gap: 8px;">
+                    <div>
+                      <small class="muted">Precio Bid (Venta)</small>
+                      <div id="quote-bid" style="font-weight: bold; font-size: 1.2em; color: var(--danger);">--</div>
+                    </div>
+                    <div>
+                      <small class="muted">Precio Ask (Compra)</small>
+                      <div id="quote-ask" style="font-weight: bold; font-size: 1.2em; color: var(--success);">--</div>
+                    </div>
+                    <div>
+                      <small class="muted">Especificación de Market</small>
+                      <div id="symbol-volume" style="font-size: 0.9em;">--</div>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- Operativo -->
+                <section class="panel">
+                  <h3>Nueva Orden Forex.com</h3>
+                  <form id="order-form">
+                    <label>
+                      Cantidad / Lotes
+                      <input type="number" id="order-volume" value="1.0" min="0.01" step="0.01" required />
+                      <small class="muted" style="display: block; margin-top: 4px;">Ejemplo: 1.0 (unidades), 10.0 (contratos)</small>
+                    </label>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
+                      <label>
+                        Stop Loss (Precio)
+                        <input type="number" id="order-sl" placeholder="Opcional" step="0.01" />
+                      </label>
+                      <label>
+                        Take Profit (Precio)
+                        <input type="number" id="order-tp" placeholder="Opcional" step="0.01" />
+                      </label>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; margin-top: 15px;">
+                      <button class="button btn-sell full" type="button" id="btn-order-sell">VENDER (Sell)</button>
+                      <button class="button btn-buy full" type="button" id="btn-order-buy">COMPRAR (Buy)</button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+
+              <!-- Inteligencia Artificial / Predicción -->
+              <section class="panel" style="margin-top: 20px; background: rgba(255, 255, 255, 0.01);">
+                <h3>Análisis Predictivo (Gemini AI)</h3>
+                  <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                    <label class="switch-row" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                      <input id="auto-trade-signals" type="checkbox" />
+                      <span>Auto-operar señales</span>
+                    </label>
+                      <label class="switch-row" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                        <input id="forex-auto-trade" type="checkbox" />
+                        <span>Auto-operar señales (Global)</span>
+                      </label>
+                    <label class="switch-row" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                      <input id="forex-force-smart-allowed" type="checkbox" />
+                      <span>Forzar smart_allowed en todas las señales</span>
+                    </label>
+                    <label class="switch-row" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                      <input id="forex-auto-predict" type="checkbox" />
+                      <span>Auto-predecir (Scalp)</span>
+                    </label>
+                    <label class="switch-row" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                      <input id="forex-auto-evaluate" type="checkbox" />
+                      <span>Auto-evaluar (Fondo)</span>
+                    </label>
+                  </div>
+                  <div style="display: flex; gap: 10px; align-items: center;">
+                    <button class="button primary" id="btn-save-automation" style="background: #29b6f6; border: none; color: #000; font-weight: bold;" type="button">💾 Guardar Automatización</button>
+                    <button class="button primary" id="btn-run-prediction" type="button">Análisis Cuantitativo IA</button>
+                    <button class="button" id="btn-run-scalp-prediction" style="background: var(--accent); color: #000; border: none; font-weight: bold;" type="button">Estrategia XAU Scalp IA</button>
+                  </div>
+                  <div style="margin-top:8px; display:flex; gap:12px; align-items:center;">
+                    <label style="color: #fff; font-size:0.9em; display:flex; align-items:center; gap:8px;">
+                      Volumen auto (lotes)
+                      <input type="number" id="automation-volume" value="1.0" min="0.01" step="0.01" style="width:100px; padding:4px; background:transparent; border:1px solid var(--border); color:#fff;" />
+                    </label>
+                    <label style="color: #fff; font-size:0.9em; display:flex; align-items:center; gap:8px;">
+                      Auto-trade por símbolo
+                      <input type="checkbox" id="automation-auto-trade" style="width:18px; height:18px;" />
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Active Automations List -->
+                <div id="active-automations-panel" style="margin-top: 15px; border-top: 1px solid var(--border); padding-top: 15px;">
+                  <h4 style="margin: 0 0 10px 0; color: #fff;">Instrumentos en Automático (Scalping)</h4>
+                  <div style="overflow-x: auto;">
+                    <table style="width: 100%; font-size: 12px; border-collapse: collapse; text-align: left;">
+                      <thead>
+                        <tr style="border-bottom: 1px solid var(--border); color: #888;">
+                          <th style="padding: 6px 12px;">Instrumento</th>
+                          <th style="padding: 6px 12px;">Auto-Predecir</th>
+                          <th style="padding: 6px 12px;">Auto-Evaluar</th>
+                          <th style="padding: 6px 12px;">Auto-Operar</th>
+                          <th style="padding: 6px 12px;">Volumen</th>
+                          <th style="padding: 6px 12px; text-align: right;">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody id="active-automations-list">
+                        <tr>
+                          <td colspan="6" class="muted" style="padding: 12px; text-align: center;">No hay instrumentos automatizados activos</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div id="prediction-result-panel" style="display: none; border-top: 1px solid var(--border); padding-top: 15px; margin-top: 15px;">
+                  <div style="display: grid; grid-template-columns: 300px 1fr; gap: 20px; flex-wrap: wrap;">
+                    <div class="hero-card" id="pred-direction-card" style="padding: 16px; min-height: auto; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.2);">
+                      <p class="eyebrow" id="pred-confidence-tag">Dirección Sugerida</p>
+                      <h2 id="pred-direction" style="font-size: 2em; margin: 5px 0;">NEUTRAL</h2>
+                      <div id="pred-probabilities" class="muted" style="font-size: 0.9em; margin-bottom: 10px;">Prob: Up 0% | Down 0%</div>
+                      <div id="pred-suggested-prices" style="font-weight: bold; font-size: 0.95em; color: var(--accent);">--</div>
+                    </div>
+                    
+                    <div>
+                      <strong style="display: block; margin-bottom: 5px; color: #fff;">Resumen Técnico:</strong>
+                      <p id="pred-summary" class="muted" style="margin-bottom: 12px; font-size: 0.95em; line-height: 1.4;"></p>
+                      
+                      <strong style="display: block; margin-bottom: 5px; color: #fff;">Razones del Análisis:</strong>
+                      <ul id="pred-reasons" class="muted" style="margin-bottom: 12px; padding-left: 20px; font-size: 0.9em; line-height: 1.4;"></ul>
+                      
+                      <strong style="display: block; margin-bottom: 5px; color: #fff;">Riesgos Identificados:</strong>
+                      <ul id="pred-risks" class="muted" style="padding-left: 20px; font-size: 0.9em; line-height: 1.4;"></ul>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <!-- Órdenes Pendientes (Columna Estrecha / Izquierda en la segunda fila) -->
+            <section class="panel" id="orders-section" style="display: none; margin-top: 20px;">
+              <h3>Órdenes Pendientes</h3>
+              <div class="table-wrapper">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                  <thead>
+                    <tr style="border-bottom: 1px solid var(--border);">
+                      <th style="padding: 12px; font-size: 0.9em;">ID Orden</th>
+                      <th style="padding: 12px; font-size: 0.9em;">Mercado</th>
+                      <th style="padding: 12px; font-size: 0.9em;">Detalle</th>
+                      <th style="padding: 12px; font-size: 0.9em; text-align: right;">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="orders-table-body">
+                    <tr>
+                      <td colspan="4" class="muted" style="padding: 16px; text-align: center;">
+                        No hay órdenes pendientes
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <!-- Posiciones Abiertas (Columna Ancha / Derecha en la segunda fila) -->
+            <section class="panel" id="positions-section" style="display: none; margin-top: 20px;">
+              <h3>Posiciones Abiertas</h3>
+              <div class="table-wrapper">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                  <thead>
+                    <tr style="border-bottom: 1px solid var(--border);">
+                      <th style="padding: 12px;">ID Posición</th>
+                      <th style="padding: 12px;">Mercado ID</th>
+                      <th style="padding: 12px;">Dirección</th>
+                      <th style="padding: 12px;">Cantidad</th>
+                      <th style="padding: 12px;">Precio Entrada</th>
+                      <th style="padding: 12px;">SL / TP</th>
+                      <th style="padding: 12px;">P&L (Flotante)</th>
+                      <th style="padding: 12px;">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="positions-table-body">
+                    <tr>
+                      <td colspan="8" class="muted" style="padding: 16px; text-align: center;">
+                        No hay posiciones abiertas
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Modification Modal -->
+    <div class="modal" id="modify-modal">
+      <div class="modal-content">
+        <h3 id="modify-desc">Modificar Posición</h3>
+        <form id="modify-form" style="display: grid; gap: 15px; margin-top: 15px;">
+          <input type="hidden" id="modify-position-id" />
+          <label>
+            Stop Loss (Precio)
+            <input type="number" id="modify-sl" placeholder="Sin SL" step="0.01" />
+          </label>
+          <label>
+            Take Profit (Precio)
+            <input type="number" id="modify-tp" placeholder="Sin TP" step="0.01" />
+          </label>
+          <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button class="button secondary full" type="button" id="btn-modify-cancel">Cancelar</button>
+            <button class="button primary full" type="submit">Guardar Cambios</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="./forexcom.js" type="module"></script>
+  </body>
+</html>

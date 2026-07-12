@@ -1,0 +1,631 @@
+{
+  "info": {
+    "name": "MarketApp - Forex.com / StoneX",
+    "description": "Collection para probar los endpoints Forex.com/StoneX desde Postman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000/api/forexcom",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "appKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "isDemo",
+      "value": "false",
+      "type": "string"
+    },
+    {
+      "key": "sessionToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "GET /config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "config"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "if (json.sessionToken) {",
+                  "  pm.collectionVariables.set(\"sessionToken\", json.sessionToken);",
+                  "}",
+                  "if (json.username) {",
+                  "  pm.collectionVariables.set(\"username\", json.username);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"appKey\": \"{{appKey}}\",\n  \"isDemo\": \"{{isDemo}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /auth/status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "logout"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Account & Market",
+      "item": [
+        {
+          "name": "GET /account",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/account",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "account"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /symbols",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/symbols?query=Gold",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "symbols"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "Gold"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /markets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/markets?query=EURUSD&maxResults=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "markets"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "EURUSD"
+                },
+                {
+                  "key": "maxResults",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /symbol",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/symbol?symbol=XAUUSD",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "symbol"
+              ],
+              "query": [
+                {
+                  "key": "symbol",
+                  "value": "XAUUSD"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /quote",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/quote?symbol=EURUSD",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "quote"
+              ],
+              "query": [
+                {
+                  "key": "symbol",
+                  "value": "EURUSD"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Positions & Orders",
+      "item": [
+        {
+          "name": "GET /positions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/positions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "positions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /candles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/candles?symbol=XAUUSD&interval=15m&days=3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "candles"
+              ],
+              "query": [
+                {
+                  "key": "symbol",
+                  "value": "XAUUSD"
+                },
+                {
+                  "key": "interval",
+                  "value": "15m"
+                },
+                {
+                  "key": "days",
+                  "value": "3"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /trade",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"symbol\": \"EURUSD\",\n  \"action\": \"BUY\",\n  \"volume\": 1,\n  \"price\": \"\",\n  \"sl\": \"\",\n  \"tp\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/trade",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "trade"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"marketId\": 1,\n  \"direction\": \"BUY\",\n  \"quantity\": 1,\n  \"price\": 1.2345,\n  \"bidPrice\": 1.2344,\n  \"offerPrice\": 1.2346,\n  \"stopLoss\": 1.23,\n  \"takeProfit\": 1.24\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/order",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /close_position",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"positionId\": 123456,\n  \"volume\": 1,\n  \"marketId\": 1,\n  \"direction\": \"BUY\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/close_position",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "close_position"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /modify_position",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"positionId\": 123456,\n  \"sl\": 1.23,\n  \"tp\": 1.24\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/modify_position",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "modify_position"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Predictions",
+      "item": [
+        {
+          "name": "POST /predict",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"symbol\": \"EURUSD\",\n  \"autoTrade\": false,\n  \"volume\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/predict",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "predict"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /predict_scalp",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-forex-session",
+                "value": "{{sessionToken}}"
+              },
+              {
+                "key": "x-forex-username",
+                "value": "{{username}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"symbol\": \"XAUUSD\",\n  \"autoTrade\": false,\n  \"volume\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/predict_scalp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "predict_scalp"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

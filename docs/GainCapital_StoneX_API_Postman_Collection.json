@@ -1,0 +1,1090 @@
+{
+  "info": {
+    "_postman_id": "24c82b4a-127d-49b0-a5a3-b5077825e661",
+    "name": "Gain Capital / StoneX / CityIndex API - REST",
+    "description": "Coleccion educativa generada desde la documentacion publica disponible de StoneX/Gain Capital/CityIndex y fuentes tecnicas publicas. Revisa cada endpoint contra la documentacion oficial antes de operar con dinero real.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Sesion",
+      "item": [
+        {
+          "name": "LogOn / Crear sesion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session"
+              ],
+              "query": []
+            },
+            "description": "Pedir una llave temporal para entrar a la API.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"UserName\": \"{{username}}\",\n  \"Password\": \"{{password}}\",\n  \"AppKey\": \"{{appKey}}\",\n  \"AppVersion\": \"1\",\n  \"AppComments\": \"Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) { const r=pm.response.json(); if (r.Session) pm.collectionVariables.set('session', r.Session); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "LogOff / Cerrar sesion",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session"
+              ],
+              "query": []
+            },
+            "description": "Cerrar la sesion actual."
+          },
+          "response": []
+        },
+        {
+          "name": "Ping / Validar sesion",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "validate"
+              ],
+              "query": []
+            },
+            "description": "Revisar si la sesion todavia funciona."
+          },
+          "response": []
+        },
+        {
+          "name": "GetServiceStatus / Estado del servicio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/system/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "system",
+                "status"
+              ],
+              "query": []
+            },
+            "description": "Mirar si el servicio de la API esta disponible."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 Cuenta",
+      "item": [
+        {
+          "name": "GetClientAndTradingAccount",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/UserAccount/ClientAndTradingAccount",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "UserAccount",
+                "ClientAndTradingAccount"
+              ],
+              "query": []
+            },
+            "description": "Trae la cuenta del cliente y las cuentas de trading."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) { const r=pm.response.json(); if (r.TradingAccounts && r.TradingAccounts[0]) pm.collectionVariables.set('tradingAccountId', r.TradingAccounts[0].TradingAccountId); if (r.ClientAccountId) pm.collectionVariables.set('clientAccountId', r.ClientAccountId); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListOpenPositions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/order/openpositions?TradingAccountId={{tradingAccountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "openpositions"
+              ],
+              "query": [
+                {
+                  "key": "TradingAccountId",
+                  "value": "{{tradingAccountId}}"
+                }
+              ]
+            },
+            "description": "Lista las posiciones abiertas."
+          },
+          "response": []
+        },
+        {
+          "name": "ListActiveStopLimitOrders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/order/activeorders?TradingAccountId={{tradingAccountId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "activeorders"
+              ],
+              "query": [
+                {
+                  "key": "TradingAccountId",
+                  "value": "{{tradingAccountId}}"
+                }
+              ]
+            },
+            "description": "Lista ordenes stop/limit pendientes o activas."
+          },
+          "response": []
+        },
+        {
+          "name": "GetOrder",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/order/{{orderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "{{orderId}}"
+              ],
+              "query": []
+            },
+            "description": "Busca una orden por su ID."
+          },
+          "response": []
+        },
+        {
+          "name": "ListTradeHistory",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/order/tradehistory?TradingAccountId={{tradingAccountId}}&maxResults={{maxResults}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "tradehistory"
+              ],
+              "query": [
+                {
+                  "key": "TradingAccountId",
+                  "value": "{{tradingAccountId}}"
+                },
+                {
+                  "key": "maxResults",
+                  "value": "{{maxResults}}"
+                }
+              ]
+            },
+            "description": "Historial de operaciones de trading."
+          },
+          "response": []
+        },
+        {
+          "name": "ListStopLimitOrderHistory",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/order/stoplimitorderhistory?TradingAccountId={{tradingAccountId}}&maxResults={{maxResults}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "stoplimitorderhistory"
+              ],
+              "query": [
+                {
+                  "key": "TradingAccountId",
+                  "value": "{{tradingAccountId}}"
+                },
+                {
+                  "key": "maxResults",
+                  "value": "{{maxResults}}"
+                }
+              ]
+            },
+            "description": "Historial de ordenes stop/limit."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 Mercados y precios",
+      "item": [
+        {
+          "name": "GetMarketInformation por nombre",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cfd/markets?marketName={{marketName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cfd",
+                "markets"
+              ],
+              "query": [
+                {
+                  "key": "marketName",
+                  "value": "{{marketName}}"
+                }
+              ]
+            },
+            "description": "Busca informacion de un mercado por nombre, por ejemplo EUR/USD."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) { const r=pm.response.json(); if (r.Markets && r.Markets[0]) pm.collectionVariables.set('marketId', r.Markets[0].MarketId); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ListCfdMarkets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cfd/markets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cfd",
+                "markets"
+              ],
+              "query": []
+            },
+            "description": "Lista mercados CFD disponibles. Puede necesitar filtros segun cuenta/region."
+          },
+          "response": []
+        },
+        {
+          "name": "FullSearchWithTags",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cfd/markets/fullsearchwithtags?SearchByMarketName={{searchText}}&MaxResults={{maxResults}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cfd",
+                "markets",
+                "fullsearchwithtags"
+              ],
+              "query": [
+                {
+                  "key": "SearchByMarketName",
+                  "value": "{{searchText}}"
+                },
+                {
+                  "key": "MaxResults",
+                  "value": "{{maxResults}}"
+                }
+              ]
+            },
+            "description": "Busqueda mas completa de mercados con etiquetas."
+          },
+          "response": []
+        },
+        {
+          "name": "GetPriceBars",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/market/{{marketId}}/barhistorybetween?interval={{interval}}&span={{span}}&fromTimeStampUTC={{fromTimestampUTC}}&toTimeStampUTC={{toTimestampUTC}}&maxResults={{maxResults}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "market",
+                "{{marketId}}",
+                "barhistorybetween"
+              ],
+              "query": [
+                {
+                  "key": "interval",
+                  "value": "{{interval}}"
+                },
+                {
+                  "key": "span",
+                  "value": "{{span}}"
+                },
+                {
+                  "key": "fromTimeStampUTC",
+                  "value": "{{fromTimestampUTC}}"
+                },
+                {
+                  "key": "toTimeStampUTC",
+                  "value": "{{toTimestampUTC}}"
+                },
+                {
+                  "key": "maxResults",
+                  "value": "{{maxResults}}"
+                }
+              ]
+            },
+            "description": "Trae velas OHLC: apertura, maximo, minimo y cierre."
+          },
+          "response": []
+        },
+        {
+          "name": "GetPriceTicks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/market/{{marketId}}/tickhistorybetween?fromTimeStampUTC={{fromTimestampUTC}}&toTimeStampUTC={{toTimestampUTC}}&maxResults={{maxResults}}&priceType={{priceType}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "market",
+                "{{marketId}}",
+                "tickhistorybetween"
+              ],
+              "query": [
+                {
+                  "key": "fromTimeStampUTC",
+                  "value": "{{fromTimestampUTC}}"
+                },
+                {
+                  "key": "toTimeStampUTC",
+                  "value": "{{toTimestampUTC}}"
+                },
+                {
+                  "key": "maxResults",
+                  "value": "{{maxResults}}"
+                },
+                {
+                  "key": "priceType",
+                  "value": "{{priceType}}"
+                }
+              ]
+            },
+            "description": "Trae ticks de precio, es decir, punticos de precio en el tiempo."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 Ordenes",
+      "item": [
+        {
+          "name": "NewTradeOrder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/order/newtradeorder",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "newtradeorder"
+              ],
+              "query": []
+            },
+            "description": "Crear una nueva orden de mercado/trade.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"MarketId\": \"{{marketId}}\",\n  \"Direction\": \"buy\",\n  \"Quantity\": 1000,\n  \"BidPrice\": 0,\n  \"OfferPrice\": 0,\n  \"TradingAccountId\": \"{{tradingAccountId}}\",\n  \"MarketName\": \"{{marketName}}\",\n  \"AutoRollover\": false,\n  \"IfDone\": [],\n  \"OcoOrder\": null,\n  \"Type\": null,\n  \"ExpiryDateTimeUTC\": null,\n  \"Applicability\": null,\n  \"TriggerPrice\": null,\n  \"PositionMethodId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) { const r=pm.response.json(); if (r.Orders && r.Orders[0]) pm.collectionVariables.set('orderId', r.Orders[0].OrderId); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "UpdateTradeOrder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/order/updatetradeorder",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "updatetradeorder"
+              ],
+              "query": []
+            },
+            "description": "Modificar una orden trade existente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"OrderId\": \"{{orderId}}\",\n  \"MarketId\": \"{{marketId}}\",\n  \"Direction\": \"buy\",\n  \"Quantity\": 1000,\n  \"BidPrice\": 0,\n  \"OfferPrice\": 0,\n  \"TradingAccountId\": \"{{tradingAccountId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "NewStopLimitOrder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/order/newstoplimitorder",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "newstoplimitorder"
+              ],
+              "query": []
+            },
+            "description": "Crear una orden stop o limit pendiente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"MarketId\": \"{{marketId}}\",\n  \"Direction\": \"buy\",\n  \"Quantity\": 1000,\n  \"OrderType\": \"Limit\",\n  \"TriggerPrice\": 0,\n  \"TradingAccountId\": \"{{tradingAccountId}}\",\n  \"Applicability\": \"GTC\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "UpdateStopLimitOrder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/order/updatestoplimitorder",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "updatestoplimitorder"
+              ],
+              "query": []
+            },
+            "description": "Modificar una orden stop/limit existente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"OrderId\": \"{{orderId}}\",\n  \"MarketId\": \"{{marketId}}\",\n  \"Direction\": \"buy\",\n  \"Quantity\": 1000,\n  \"OrderType\": \"Limit\",\n  \"TriggerPrice\": 0,\n  \"TradingAccountId\": \"{{tradingAccountId}}\",\n  \"Applicability\": \"GTC\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "CancelOrder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/order/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "cancel"
+              ],
+              "query": []
+            },
+            "description": "Cancelar una orden pendiente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"OrderId\": \"{{orderId}}\",\n  \"TradingAccountId\": \"{{tradingAccountId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "SimulateTrade",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "UserName",
+                "value": "{{username}}",
+                "type": "text",
+                "description": "Requerido despues de LogOn"
+              },
+              {
+                "key": "Session",
+                "value": "{{session}}",
+                "type": "text",
+                "description": "Se llena automaticamente si LogOn responde con Session"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/order/simulatetradeorder",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "order",
+                "simulatetradeorder"
+              ],
+              "query": []
+            },
+            "description": "Probar una orden sin enviarla de verdad.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"MarketId\": \"{{marketId}}\",\n  \"Direction\": \"buy\",\n  \"Quantity\": 1000,\n  \"BidPrice\": 0,\n  \"OfferPrice\": 0,\n  \"TradingAccountId\": \"{{tradingAccountId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// No poner claves reales en repositorios publicos."
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://ciapi.cityindex.com/TradingAPI",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "TU_USUARIO",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "TU_PASSWORD",
+      "type": "string"
+    },
+    {
+      "key": "appKey",
+      "value": "TU_APP_KEY",
+      "type": "string"
+    },
+    {
+      "key": "session",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "clientAccountId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tradingAccountId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "marketName",
+      "value": "EUR/USD",
+      "type": "string"
+    },
+    {
+      "key": "marketId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "searchText",
+      "value": "EUR",
+      "type": "string"
+    },
+    {
+      "key": "maxResults",
+      "value": "100",
+      "type": "string"
+    },
+    {
+      "key": "interval",
+      "value": "MINUTE",
+      "type": "string"
+    },
+    {
+      "key": "span",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "fromTimestampUTC",
+      "value": "1704067200",
+      "type": "string"
+    },
+    {
+      "key": "toTimestampUTC",
+      "value": "1704153600",
+      "type": "string"
+    },
+    {
+      "key": "priceType",
+      "value": "MID",
+      "type": "string"
+    }
+  ]
+}
