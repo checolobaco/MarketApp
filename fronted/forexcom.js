@@ -125,15 +125,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   appkeyInput.value = localStorage.getItem("forex_saved_appkey") || "";
   envSelect.value = localStorage.getItem("forex_saved_env") || "live";
 
-  const savedAutoTrade = localStorage.getItem("forex_auto_trade_signals");
-  if (savedAutoTrade !== null) {
-    autoTradeSignals.checked = savedAutoTrade === "true";
-  }
-
-  autoTradeSignals.addEventListener("change", () => {
-    localStorage.setItem("forex_auto_trade_signals", autoTradeSignals.checked);
-  });
-
   await loadDefaultConfig();
 
   updateSessionUI();
@@ -890,7 +881,7 @@ btnRunPrediction.addEventListener("click", async () => {
   predictionResultPanel.style.display = "none";
 
   try {
-    const autoTrade = autoTradeSignals.checked;
+    const autoTrade = typeof forexAutoTrade !== 'undefined' && forexAutoTrade !== null ? !!forexAutoTrade.checked : false;
     const volume = Number(orderVolume.value) || 1.0;
 
     const response = await fetch(getApiUrl("/api/forexcom/predict"), {
@@ -930,7 +921,7 @@ btnRunScalpPrediction.addEventListener("click", async () => {
   predictionResultPanel.style.display = "none";
 
   try {
-    const autoTrade = autoTradeSignals.checked;
+    const autoTrade = typeof forexAutoTrade !== 'undefined' && forexAutoTrade !== null ? !!forexAutoTrade.checked : false;
     const volume = Number(orderVolume.value) || 1.0;
 
     const response = await fetch(getApiUrl("/api/forexcom/predict_scalp"), {
