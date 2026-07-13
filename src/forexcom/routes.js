@@ -215,7 +215,9 @@ router.get("/account", async (req, res) => {
       Balance: margin.Cash || 0,
       Equity: margin.NetEquity || 0,
       Margin: margin.MarginRequirement || 0,
-      FreeMargin: margin.MarginIndicator || 0,
+      FreeMargin: margin.TradeableFunds !== undefined && margin.TradeableFunds !== null 
+        ? margin.TradeableFunds 
+        : ((margin.NetEquity || 0) - (margin.MarginRequirement || 0)),
       UnrealizedPnl: margin.OpenTradeEquity || 0,
       Leverage: 100 // Forex.com leverage varía, ponemos 100 por defecto
     };
@@ -1008,7 +1010,8 @@ router.post("/predict_scalp", async (req, res) => {
             id: dbResult.rows[0].id,
             symbol: symbolDisplay,
             predicted_direction: direction,
-            entry_price: indicators.lastPrice
+            entry_price: indicators.lastPrice,
+            smart_allowed: true
           },
           {
             take_profit_1: tp,

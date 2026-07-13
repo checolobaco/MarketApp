@@ -230,7 +230,8 @@ router.post("/xau/scalp/predict", async (req, res) => {
           id: inserted.rows[0].id,
           symbol: formatForexXproSymbolDisplayName("XAUUSD"),
           predicted_direction: aiResult.direction,
-          entry_price: indicators.lastPrice
+          entry_price: indicators.lastPrice,
+          smart_allowed: true
         },
         {
           stop_loss: tradePlan.stop_loss,

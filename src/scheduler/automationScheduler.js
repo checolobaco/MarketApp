@@ -376,6 +376,25 @@ async function sendTelegramSessionExpiredAlert({
 
   if (!token || !chatId) return;
 
+  const cleanSymbol = String(symbol || "").toUpperCase().trim();
+  const symbolMap = {
+    // Forex.com IDs
+    "402044083": "XAU/USD (Gold)",
+    "402044081": "XAU/USD (Gold Micro)",
+    "401449254": "EUR/USD",
+    "401203130": "GBP/USD",
+    "401203195": "USD/JPY",
+    "402044422": "BTC/USD (Bitcoin)",
+    
+    // Standard names
+    "XAUUSD": "XAU/USD (Gold)",
+    "EURUSD": "EUR/USD",
+    "GBPUSD": "GBP/USD",
+    "USDJPY": "USD/JPY",
+    "BTCUSD": "BTC/USD (Bitcoin)"
+  };
+  const displaySymbol = symbolMap[cleanSymbol] || symbol;
+
   const emoji = direction.toUpperCase() === "BUY" ? "🟢 COMPRA (BUY)" : "🔴 VENTA (SELL)";
   const pipsFormatted = pips >= 0 ? `+${Number(pips).toFixed(1)}` : Number(pips).toFixed(1);
   const pnlFormatted = profitLossUsd !== null && profitLossUsd !== undefined
@@ -385,7 +404,7 @@ async function sendTelegramSessionExpiredAlert({
   const message = `
 ⌛ *OPERACIÓN CERRADA POR EXPIRACIÓN DE SESIÓN (30 MIN)*
 ────────────────────────
-*Instrumento*: ${symbol}
+*Instrumento*: ${displaySymbol}
 *Dirección*: ${emoji}
 *Volumen*: ${volume} lotes
 *Beneficio/Pérdida*: *${pipsFormatted} pips* (${pnlFormatted})

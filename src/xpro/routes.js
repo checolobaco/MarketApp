@@ -492,7 +492,8 @@ router.post("/predict_scalp", async (req, res) => {
             id: dbResult.rows[0].id,
             symbol: formatXproSymbolDisplayName(cleanSymbol),
             predicted_direction: direction,
-            entry_price: indicators.lastPrice
+            entry_price: indicators.lastPrice,
+            smart_allowed: true
           },
           {
             take_profit_1: tp,

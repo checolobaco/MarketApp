@@ -234,12 +234,34 @@ export async function logOrderClose({
     let finalPips = pipsResult;
     if (finalPips === null) {
       const priceDiff = Math.abs(finalExitPrice - Number(record.entry_price));
-      const cleanSymbol = record.symbol.toUpperCase();
-      if (cleanSymbol === "XAUUSD" || cleanSymbol === "GOLD" || cleanSymbol === "GC=F" || cleanSymbol === "401203119") {
-        finalPips = priceDiff * 10;
-      } else {
-        finalPips = priceDiff * 10000;
+      const cleanSymbol = record.symbol.toUpperCase().trim();
+      
+      let multiplier = 10000; // default for 4 decimal forex pairs
+      
+      const isGold = cleanSymbol.includes("XAU") || 
+                     cleanSymbol.includes("GOLD") || 
+                     cleanSymbol === "GC=F" || 
+                     cleanSymbol === "401203119" || 
+                     cleanSymbol === "402044083" || 
+                     cleanSymbol === "402044081";
+                     
+      const isJpy = cleanSymbol.includes("JPY") || 
+                    cleanSymbol === "401203195" || 
+                    cleanSymbol === "401483120";
+                    
+      const isCrypto = cleanSymbol.includes("BTC") || 
+                       cleanSymbol.includes("ETH") || 
+                       cleanSymbol === "402044422";
+                       
+      if (isGold) {
+        multiplier = 10;
+      } else if (isJpy) {
+        multiplier = 100;
+      } else if (isCrypto) {
+        multiplier = 1;
       }
+      
+      finalPips = priceDiff * multiplier;
       if (record.action === "SELL" ? finalExitPrice > Number(record.entry_price) : finalExitPrice < Number(record.entry_price)) {
         finalPips = -finalPips;
       }

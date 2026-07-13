@@ -10,9 +10,30 @@ export async function sendTelegramSignal(prediction, tradePlan, tradeQuality) {
     return;
   }
 
-  const symbol = prediction.symbol || "XAUUSD";
+  let symbol = prediction.symbol || "XAUUSD";
+  const cleanSym = String(symbol).toUpperCase().trim();
+  const symMap = {
+    // Forex.com IDs
+    "402044083": "XAU/USD (Gold)",
+    "402044081": "XAU/USD (Gold Micro)",
+    "401449254": "EUR/USD",
+    "401203130": "GBP/USD",
+    "401203195": "USD/JPY",
+    "402044422": "BTC/USD (Bitcoin)",
+    
+    // Standard names
+    "XAUUSD": "XAU/USD (Gold)",
+    "EURUSD": "EUR/USD",
+    "GBPUSD": "GBP/USD",
+    "USDJPY": "USD/JPY",
+    "BTCUSD": "BTC/USD (Bitcoin)"
+  };
+  symbol = symMap[cleanSym] || symbol;
+
   const emoji = prediction.predicted_direction === "BUY" ? "🟢 COMPRA (BUY)" : "🔴 VENTA (SELL)";
-  const smartAllowedText = prediction.smart_allowed ? '✅ Sí' : '❌ No';
+  const smartAllowedText = prediction.smart_allowed !== undefined
+    ? (prediction.smart_allowed ? '✅ Sí' : '❌ No')
+    : 'N/A';
   const message = `
 🚀 *NUEVA SEÑAL ALINEADA - ${symbol}*
 ────────────────────────
@@ -77,7 +98,26 @@ export async function sendTelegramCloseSignal(prediction, resultType, pipsResult
 
   if (!token || !chatId) return;
 
-  const symbol = prediction.symbol || "XAUUSD";
+  let symbol = prediction.symbol || "XAUUSD";
+  const cleanSym = String(symbol).toUpperCase().trim();
+  const symMap = {
+    // Forex.com IDs
+    "402044083": "XAU/USD (Gold)",
+    "402044081": "XAU/USD (Gold Micro)",
+    "401449254": "EUR/USD",
+    "401203130": "GBP/USD",
+    "401203195": "USD/JPY",
+    "402044422": "BTC/USD (Bitcoin)",
+    
+    // Standard names
+    "XAUUSD": "XAU/USD (Gold)",
+    "EURUSD": "EUR/USD",
+    "GBPUSD": "GBP/USD",
+    "USDJPY": "USD/JPY",
+    "BTCUSD": "BTC/USD (Bitcoin)"
+  };
+  symbol = symMap[cleanSym] || symbol;
+
   const direction = prediction.predicted_direction;
   const smartAllowedText = prediction.smart_allowed !== undefined
     ? prediction.smart_allowed ? '✅ Sí' : '❌ No'

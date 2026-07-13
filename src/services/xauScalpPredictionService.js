@@ -219,7 +219,8 @@ export async function createXauScalpPrediction({
         id: inserted.rows[0].id,
         symbol: formatForexXproSymbolDisplayName(symbol),
         predicted_direction: aiResult.direction,
-        entry_price: indicators.lastPrice
+        entry_price: indicators.lastPrice,
+        smart_allowed: true
       },
       {
         stop_loss: tradePlan.stop_loss,
