@@ -2,6 +2,39 @@
 import { pool } from "../db.js";
 
 /**
+ * Normaliza el volumen ingresado a lotes estándar según el tipo de activo y el broker.
+ * En Forex.com y Oanda, el volumen suele ingresarse en unidades (ej. 1000, 10000).
+ * En Xpro y MarketApp Main, se suele ingresar en lotes estándar (ej. 0.01, 0.1).
+ */
+export function getStandardLots(symbol, volume) {
+  const cleanSymbol = String(symbol || "").toUpperCase().trim();
+  const vol = Number(volume) || 0;
+  
+  const isForex = cleanSymbol.includes("/") || cleanSymbol.length === 6 || cleanSymbol.startsWith("USD") || cleanSymbol.startsWith("EUR") || cleanSymbol.startsWith("GBP") || cleanSymbol.startsWith("AUD") || cleanSymbol.startsWith("NZD") || !isNaN(cleanSymbol);
+  const isGold = cleanSymbol.startsWith("XAU") || cleanSymbol === "GOLD" || cleanSymbol === "GC=F" || cleanSymbol === "401203119";
+
+  if (isGold) {
+    // Para Oro: 1 lote estándar = 100 onzas.
+    // Si es >= 5, asumimos que viene en onzas (unidades) y lo dividimos por 100.
+    if (vol >= 5) {
+      return vol / 100;
+    }
+    return vol;
+  }
+
+  if (isForex) {
+    // Para Forex: 1 lote estándar = 100,000 unidades.
+    // Si es >= 50, asumimos que viene en unidades directas y lo dividimos por 100,000.
+    if (vol >= 50) {
+      return vol / 100000;
+    }
+    return vol;
+  }
+  
+  return vol; // Otros CFDs/Acciones
+}
+
+/**
  * Calcula el beneficio o pérdida estimado en dólares (USD) según el activo y lotaje.
  */
 export async function calculateUsdProfitLoss(symbol, action, volume, entryPrice, exitPrice) {
@@ -10,9 +43,11 @@ export async function calculateUsdProfitLoss(symbol, action, volume, entryPrice,
   const diff = Number(exitPrice) - Number(entryPrice);
   const factor = action.toUpperCase() === "BUY" ? 1 : -1;
   
-  if (cleanSymbol.startsWith("XAU") || cleanSymbol === "GOLD" || cleanSymbol === "GC=F") {
+  const lots = getStandardLots(cleanSymbol, volume);
+  
+  if (cleanSymbol.startsWith("XAU") || cleanSymbol === "GOLD" || cleanSymbol === "GC=F" || cleanSymbol === "401203119") {
     // Oro (XAU/USD): 1 lote estándar = 100 onzas de oro.
-    return diff * 100 * Number(volume) * factor;
+    return diff * 100 * lots * factor;
   }
 
   // Identificar divisa de cotización (segunda divisa del par)
@@ -33,20 +68,8 @@ export async function calculateUsdProfitLoss(symbol, action, volume, entryPrice,
     quoteCurrency = "AUD";
   }
 
-  // Determinar multiplicador: en Forex, si el volumen es en lotes (ej. < 50) o en unidades (ej. > 50)
-  let multiplier = 1;
-  const numericVol = Number(volume);
-  const isForex = cleanSymbol.includes("/") || cleanSymbol.length === 6 || cleanSymbol.startsWith("USD") || cleanSymbol.startsWith("EUR") || cleanSymbol.startsWith("GBP");
-  
-  if (isForex) {
-    if (numericVol < 50) {
-      multiplier = 100000; // Lotes estándar
-    } else {
-      multiplier = 1; // Unidades directas
-    }
-  }
-
-  const rawPnl = diff * numericVol * multiplier * factor;
+  // Forex P&L en divisa secundaria = diff * 100,000 * lots * factor
+  const rawPnl = diff * 100000 * lots * factor;
 
   // Convertir a USD si la divisa secundaria es diferente
   if (quoteCurrency !== "USD") {
@@ -96,20 +119,20 @@ export async function calculateUsdProfitLoss(symbol, action, volume, entryPrice,
 }
 
 /**
- * Calcula el costo de comisión estimado según el broker/fuente de la orden y volumen.
+ * Calcula el costo de comisión estimado según el broker/fuente de la orden, volumen y símbolo.
  */
-export function calculateCommission(source, volume) {
+export function calculateCommission(source, volume, symbol) {
   const cleanSource = String(source).toUpperCase().trim();
-  const vol = Number(volume) || 0;
+  const lots = getStandardLots(symbol, volume);
 
   if (cleanSource === "XPRO_TERMINAL") {
     // Xpro (XBTFX) ECN: Comisión típica de $3.00 USD por lado por lote ($6.00 por lote round-turn)
-    return vol * 6.00;
+    return lots * 6.00;
   }
   
   if (cleanSource === "FOREX_COM") {
     // Forex.com: Cuenta de comisiones estándar es $5.00 USD por lado por lote ($10.00 por lote round-turn)
-    return vol * 10.00;
+    return lots * 10.00;
   }
 
   // Oanda y MarketApp Main operan con cuentas spread-only por defecto (comisión cero)
@@ -132,7 +155,7 @@ export async function logOrderOpen({
   notes = null
 }) {
   try {
-    const commission = calculateCommission(source, volume);
+    const commission = calculateCommission(source, volume, symbol);
     
     const query = `
       INSERT INTO trading_journal (
@@ -158,7 +181,7 @@ export async function logOrderOpen({
     ];
     
     const { rows } = await pool.query(query, values);
-    console.log(`[Journal] Orden #${rows[0].id} abierta (${symbol} ${action}) Lotes: ${volume} Comisión: $${commission} USD`);
+    console.log(`[Journal] Orden #${rows[0].id} abierta (${symbol} ${action}) Lotes/Units: ${volume} Comisión: $${commission.toFixed(2)} USD`);
     return rows[0].id;
   } catch (error) {
     console.error("❌ Error al guardar apertura en trading_journal:", error.message);
@@ -211,7 +234,8 @@ export async function logOrderClose({
     let finalPips = pipsResult;
     if (finalPips === null) {
       const priceDiff = Math.abs(finalExitPrice - Number(record.entry_price));
-      if (record.symbol === "XAUUSD") {
+      const cleanSymbol = record.symbol.toUpperCase();
+      if (cleanSymbol === "XAUUSD" || cleanSymbol === "GOLD" || cleanSymbol === "GC=F" || cleanSymbol === "401203119") {
         finalPips = priceDiff * 10;
       } else {
         finalPips = priceDiff * 10000;

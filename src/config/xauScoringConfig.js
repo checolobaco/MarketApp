@@ -35,7 +35,7 @@ export const XAU_SCORING_CONFIG = {
       NEWYORK: 75,
       LONDON: 70,
       LONDON_NEWYORK_OVERLAP: 65,
-      ASIA: 80,
+      ASIA: 50,
       UNKNOWN: 50
     },
 

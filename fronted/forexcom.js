@@ -130,6 +130,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadDefaultConfig();
 
   updateSessionUI();
+  
+  // Restablecer checkbox de P&L en tiempo real desde localStorage
+  const savedRealtimePnl = localStorage.getItem("forex_realtime_pnl");
+  if (chkRealtimePnl && savedRealtimePnl !== null) {
+    chkRealtimePnl.checked = savedRealtimePnl === "true";
+  }
+
   if (sessionToken && sessionUsername) {
     loadAllData();
     loadAutomationSettings();
@@ -156,6 +163,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (chkRealtimePnl) {
     chkRealtimePnl.addEventListener("change", () => {
+      localStorage.setItem("forex_realtime_pnl", String(chkRealtimePnl.checked));
       if (chkRealtimePnl.checked) {
         startRealtimePnlPolling();
         showToast("P&L flotante en tiempo real activado");
@@ -721,6 +729,7 @@ async function loadPositions() {
 
     if (result.ok && result.data && Array.isArray(result.data.OpenPositions)) {
       const positions = result.data.OpenPositions;
+      hasOpenPositions = positions.length > 0;
       if (positions.length === 0) {
         positionsTableBody.innerHTML = `<tr><td colspan="9" class="muted" style="padding: 16px; text-align: center;">No hay posiciones abiertas</td></tr>`;
         return;
@@ -1183,6 +1192,7 @@ async function loadLocalCandleChart(symbolName, predictionData = null) {
 }
 
 let realtimePnlInterval = null;
+let hasOpenPositions = false;
 
 function startRealtimePnlPolling() {
   stopRealtimePnlPolling();
@@ -1191,6 +1201,10 @@ function startRealtimePnlPolling() {
 
   realtimePnlInterval = setInterval(async () => {
     try {
+      if (!hasOpenPositions) {
+        // Si no hay posiciones abiertas, no hacemos peticiones al broker
+        return;
+      }
       if (sessionToken) {
         await Promise.all([
           loadAccountDetails(),
