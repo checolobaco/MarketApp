@@ -4,7 +4,7 @@ import { pool } from "../db.js";
 /**
  * Calcula el beneficio o pérdida estimado en dólares (USD) según el activo y lotaje.
  */
-export function calculateUsdProfitLoss(symbol, action, volume, entryPrice, exitPrice) {
+export async function calculateUsdProfitLoss(symbol, action, volume, entryPrice, exitPrice) {
   if (entryPrice === null || exitPrice === null || !volume) return 0;
   const cleanSymbol = symbol.toUpperCase().trim();
   const diff = Number(exitPrice) - Number(entryPrice);
@@ -12,23 +12,87 @@ export function calculateUsdProfitLoss(symbol, action, volume, entryPrice, exitP
   
   if (cleanSymbol.startsWith("XAU") || cleanSymbol === "GOLD" || cleanSymbol === "GC=F") {
     // Oro (XAU/USD): 1 lote estándar = 100 onzas de oro.
-    // USD = diferencia de precio * 100 onzas * volumen
     return diff * 100 * Number(volume) * factor;
   }
-  
-  if (
-    cleanSymbol.endsWith("USD") || 
-    cleanSymbol.startsWith("EUR") || 
-    cleanSymbol.startsWith("GBP") ||
-    cleanSymbol.startsWith("AUD")
-  ) {
-    // Forex (Divisas cotizadas en USD): 1 lote estándar = 100,000 unidades de divisa base.
-    // Ej: EURUSD con precio 1.0800 a 1.0900 es +0.0100 * 100,000 * vol = +$1000 por lote.
-    return diff * 100000 * Number(volume) * factor;
+
+  // Identificar divisa de cotización (segunda divisa del par)
+  let quoteCurrency = "USD";
+  if (cleanSymbol.includes("/JPY") || cleanSymbol.endsWith("JPY") || cleanSymbol.includes("401203119")) {
+    quoteCurrency = "JPY";
+  } else if (cleanSymbol.includes("/NZD") || cleanSymbol.endsWith("NZD") || cleanSymbol.includes("401203116")) {
+    quoteCurrency = "NZD";
+  } else if (cleanSymbol.includes("/GBP") || cleanSymbol.endsWith("GBP")) {
+    quoteCurrency = "GBP";
+  } else if (cleanSymbol.includes("/EUR") || cleanSymbol.endsWith("EUR")) {
+    quoteCurrency = "EUR";
+  } else if (cleanSymbol.includes("/CHF") || cleanSymbol.endsWith("CHF")) {
+    quoteCurrency = "CHF";
+  } else if (cleanSymbol.includes("/CAD") || cleanSymbol.endsWith("CAD")) {
+    quoteCurrency = "CAD";
+  } else if (cleanSymbol.includes("/AUD") || cleanSymbol.endsWith("AUD")) {
+    quoteCurrency = "AUD";
   }
+
+  // Determinar multiplicador: en Forex, si el volumen es en lotes (ej. < 50) o en unidades (ej. > 50)
+  let multiplier = 1;
+  const numericVol = Number(volume);
+  const isForex = cleanSymbol.includes("/") || cleanSymbol.length === 6 || cleanSymbol.startsWith("USD") || cleanSymbol.startsWith("EUR") || cleanSymbol.startsWith("GBP");
   
-  // Acciones y CFDs sobre índices (habitualmente 1 contrato = 1 acción/unidad de índice)
-  return diff * Number(volume) * factor;
+  if (isForex) {
+    if (numericVol < 50) {
+      multiplier = 100000; // Lotes estándar
+    } else {
+      multiplier = 1; // Unidades directas
+    }
+  }
+
+  const rawPnl = diff * numericVol * multiplier * factor;
+
+  // Convertir a USD si la divisa secundaria es diferente
+  if (quoteCurrency !== "USD") {
+    try {
+      const { getCurrentPrice } = await import("../data_provider/marketData.js");
+      if (quoteCurrency === "JPY") {
+        const rate = await getCurrentPrice("USDJPY").catch(() => 161.7);
+        return rawPnl / rate;
+      } else if (quoteCurrency === "NZD") {
+        const rate = await getCurrentPrice("NZDUSD").catch(() => 0.61);
+        return rawPnl * rate;
+      } else if (quoteCurrency === "GBP") {
+        const rate = await getCurrentPrice("GBPUSD").catch(() => 1.28);
+        return rawPnl * rate;
+      } else if (quoteCurrency === "EUR") {
+        const rate = await getCurrentPrice("EURUSD").catch(() => 1.09);
+        return rawPnl * rate;
+      } else if (quoteCurrency === "CHF") {
+        const rate = await getCurrentPrice("USDCHF").catch(() => 0.89);
+        return rawPnl / rate;
+      } else if (quoteCurrency === "CAD") {
+        const rate = await getCurrentPrice("USDCAD").catch(() => 1.36);
+        return rawPnl / rate;
+      } else if (quoteCurrency === "AUD") {
+        const rate = await getCurrentPrice("AUDUSD").catch(() => 0.67);
+        return rawPnl * rate;
+      }
+    } catch (e) {
+      console.warn(`[calculateUsdProfitLoss] Error al obtener tasa de conversión para ${quoteCurrency}, usando fallback:`, e.message);
+    }
+    
+    // Fallbacks estáticos si falla la red
+    const staticRates = {
+      "JPY": 1.0 / 161.7,
+      "NZD": 0.61,
+      "GBP": 1.28,
+      "EUR": 1.09,
+      "CHF": 1.0 / 0.89,
+      "CAD": 1.0 / 1.36,
+      "AUD": 0.67
+    };
+    const rate = staticRates[quoteCurrency] || 1.0;
+    return rawPnl * (quoteCurrency === "JPY" || quoteCurrency === "CHF" || quoteCurrency === "CAD" ? 1.0 / (1.0 / rate) : rate);
+  }
+
+  return rawPnl;
 }
 
 /**
@@ -159,7 +223,7 @@ export async function logOrderClose({
     
     let finalUsd = profitLossUsd;
     if (finalUsd === null) {
-      finalUsd = calculateUsdProfitLoss(
+      finalUsd = await calculateUsdProfitLoss(
         record.symbol,
         record.action,
         record.volume,

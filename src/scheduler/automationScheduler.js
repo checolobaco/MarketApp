@@ -9,6 +9,10 @@ import {
   getAutomationState,
   markAutomationRun
 } from "./automationState.js";
+import { pool } from "../db.js";
+import { logOrderClose } from "../services/tradingJournalService.js";
+import { ForexComClient } from "../forexcom/client.js";
+import { XproClient } from "../xpro/client.js";
 
 let isRunning = false;
 
@@ -53,6 +57,9 @@ export function startAutomationScheduler() {
       if (state.forex_auto_predict) {
         await runAutoForexPrediction(state);
       }
+
+      // — Validar y Cerrar Posiciones Expiradas (30 minutos) —
+      await closeExpiredPositions();
 
       markAutomationRun({ last_error: null });
     } catch (error) {
@@ -352,4 +359,244 @@ function getColombiaPart(part) {
       hour12: false
     }).format(new Date())
   );
+}
+
+async function sendTelegramSessionExpiredAlert({
+  symbol,
+  direction,
+  volume,
+  entryPrice,
+  exitPrice,
+  profitLossUsd,
+  pips,
+  predictionId
+}) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (!token || !chatId) return;
+
+  const emoji = direction.toUpperCase() === "BUY" ? "🟢 COMPRA (BUY)" : "🔴 VENTA (SELL)";
+  const pipsFormatted = pips >= 0 ? `+${Number(pips).toFixed(1)}` : Number(pips).toFixed(1);
+  const pnlFormatted = profitLossUsd !== null && profitLossUsd !== undefined
+    ? `${Number(profitLossUsd) >= 0 ? "+" : ""}$${Number(profitLossUsd).toFixed(2)} USD`
+    : "N/A";
+
+  const message = `
+⌛ *OPERACIÓN CERRADA POR EXPIRACIÓN DE SESIÓN (30 MIN)*
+────────────────────────
+*Instrumento*: ${symbol}
+*Dirección*: ${emoji}
+*Volumen*: ${volume} lotes
+*Beneficio/Pérdida*: *${pipsFormatted} pips* (${pnlFormatted})
+
+*Detalles del Cierre*:
+📌 *Motivo*: Expiración del tiempo límite de sesión (30 minutos)
+⏱️ *Duración*: 30 minutos
+💵 *Entrada*: $${entryPrice}
+🚪 *Salida*: $${exitPrice}
+
+*ID de la Predicción*: #${predictionId || 'N/A'}
+────────────────────────
+_Registro automático por MarketApp._
+`;
+
+  const startTime = Date.now();
+  let status = "FAILED";
+  let errorMessage = null;
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: "Markdown"
+      })
+    });
+
+    const data = await response.json();
+    if (!data.ok) {
+      errorMessage = data.description;
+      console.error("❌ Error de Telegram al enviar alerta de expiración directa:", data.description);
+    } else {
+      status = "SUCCESS";
+      console.log(`⚡ Alerta de expiración de sesión para ${symbol} enviada a Telegram.`);
+    }
+  } catch (error) {
+    errorMessage = error.message;
+    console.error("❌ Error al enviar alerta de expiración directa a Telegram:", error);
+  } finally {
+    const responseTime = Date.now() - startTime;
+    try {
+      await pool.query(`
+        INSERT INTO api_logs (provider, symbol, request_type, status, error_message, response_time_ms)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, ['TELEGRAM', symbol, 'SEND_EXPIRY_ALERT', status, errorMessage, responseTime]);
+    } catch (e) {
+      console.error("Error al registrar log de Telegram en db:", e.message);
+    }
+  }
+}
+
+async function closeExpiredPositions() {
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, symbol, action, volume, entry_price, status, source, prediction_id, broker_position_id, created_at FROM trading_journal WHERE status = 'OPEN'"
+    );
+
+    if (rows.length === 0) return;
+
+    const now = new Date();
+    const expiredPositions = rows.filter(row => {
+      const createdAt = new Date(row.created_at);
+      const diffMinutes = (now - createdAt) / (1000 * 60);
+      return diffMinutes >= 30; // 30 minutos o más
+    });
+
+    if (expiredPositions.length === 0) return;
+
+    console.log(`[SessionExpiry] Se encontraron ${expiredPositions.length} posiciones abiertas candidatas a expiración.`);
+
+    let forexClient = null;
+    let xproClient = null;
+
+    for (const pos of expiredPositions) {
+      try {
+        if (pos.source === "FOREX_COM") {
+          if (!forexClient) {
+            const envUser = process.env.FOREX_USERNAME;
+            const envPass = process.env.FOREX_PASSWORD;
+            const envAppKey = process.env.FOREX_APPKEY;
+            const sessionToken = process.env.FOREX_SESSION_TOKEN;
+            
+            forexClient = new ForexComClient({
+              username: envUser,
+              password: envPass,
+              appKey: envAppKey,
+              isDemo: process.env.FOREX_IS_DEMO === "true"
+            });
+
+            if (sessionToken) {
+              forexClient.setSession(sessionToken, envUser);
+            } else if (envUser && (envPass || envAppKey)) {
+              await forexClient.login();
+            } else {
+              throw new Error("No hay credenciales o sesión de Forex.com configurada.");
+            }
+          }
+
+          const positionsResult = await forexClient.getOpenPositions();
+          const openPositions = positionsResult.OpenPositions || [];
+          const activePos = openPositions.find(p => String(p.OrderId || p.PositionId) === String(pos.broker_position_id));
+
+          if (activePos) {
+            console.log(`[SessionExpiry] Cerrando posición activa en Forex.com: ID=${pos.broker_position_id} (${pos.symbol})`);
+            const closeResult = await forexClient.closePosition({
+              positionId: pos.broker_position_id,
+              quantity: Number(pos.volume),
+              marketId: activePos.MarketId,
+              direction: activePos.Direction
+            });
+
+            const exitPrice = closeResult.Price || (closeResult.Orders && closeResult.Orders[0] && closeResult.Orders[0].Price) || activePos.Price || pos.entry_price;
+
+            await logOrderClose({
+              brokerPositionId: pos.broker_position_id,
+              exitPrice: exitPrice,
+              notes: "Cierre automático al vencimiento de sesión (30 minutos)."
+            });
+
+            const { rows: updatedRows } = await pool.query(
+              "SELECT symbol, action, volume, entry_price, exit_price, pips_result, profit_loss_usd, prediction_id FROM trading_journal WHERE broker_position_id = $1 ORDER BY id DESC LIMIT 1",
+              [String(pos.broker_position_id)]
+            );
+
+            if (updatedRows.length > 0) {
+              const r = updatedRows[0];
+              await sendTelegramSessionExpiredAlert({
+                symbol: r.symbol,
+                direction: r.action,
+                volume: Number(r.volume),
+                entryPrice: Number(r.entry_price),
+                exitPrice: Number(r.exit_price),
+                profitLossUsd: Number(r.profit_loss_usd),
+                pips: Number(r.pips_result),
+                predictionId: r.prediction_id
+              });
+            }
+          } else {
+            console.log(`[SessionExpiry] La posición #${pos.broker_position_id} ya no está activa en Forex.com. Cerrando localmente en DB.`);
+            
+            let exitPrice = pos.entry_price;
+            try {
+              const marketInfo = await forexClient.getMarketInformation(pos.symbol);
+              exitPrice = marketInfo?.MarketInformation?.Bid || pos.entry_price;
+            } catch (errPrice) {}
+
+            await logOrderClose({
+              brokerPositionId: pos.broker_position_id,
+              exitPrice: exitPrice,
+              notes: "Cerrada externamente (detectado al validar expiración)."
+            });
+          }
+
+        } else if (pos.source === "XPRO" || pos.source === "XPRO_TERMINAL") {
+          if (!xproClient) {
+            xproClient = new XproClient({ token: process.env.XPRO_API_KEY });
+          }
+
+          const openPositions = await xproClient.getOpenPositions().catch(() => []);
+          const activePos = (Array.isArray(openPositions) ? openPositions : []).find(p => String(p.positionId || p.PositionId || p.position) === String(pos.broker_position_id));
+
+          if (activePos) {
+            console.log(`[SessionExpiry] Cerrando posición activa en XPRO: ID=${pos.broker_position_id} (${pos.symbol})`);
+            const closeResult = await xproClient.closePosition({
+              positionId: pos.broker_position_id,
+              volume: Number(pos.volume)
+            });
+
+            const exitPrice = closeResult?.price || activePos.price || pos.entry_price;
+
+            await logOrderClose({
+              brokerPositionId: pos.broker_position_id,
+              exitPrice: exitPrice,
+              notes: "Cierre automático al vencimiento de sesión (30 minutos)."
+            });
+
+            const { rows: updatedRows } = await pool.query(
+              "SELECT symbol, action, volume, entry_price, exit_price, pips_result, profit_loss_usd, prediction_id FROM trading_journal WHERE broker_position_id = $1 ORDER BY id DESC LIMIT 1",
+              [String(pos.broker_position_id)]
+            );
+
+            if (updatedRows.length > 0) {
+              const r = updatedRows[0];
+              await sendTelegramSessionExpiredAlert({
+                symbol: r.symbol,
+                direction: r.action,
+                volume: Number(r.volume),
+                entryPrice: Number(r.entry_price),
+                exitPrice: Number(r.exit_price),
+                profitLossUsd: Number(r.profit_loss_usd),
+                pips: Number(r.pips_result),
+                predictionId: r.prediction_id
+              });
+            }
+          } else {
+            console.log(`[SessionExpiry] La posición #${pos.broker_position_id} ya no está activa en XPRO. Cerrando localmente en DB.`);
+            await logOrderClose({
+              brokerPositionId: pos.broker_position_id,
+              exitPrice: pos.entry_price,
+              notes: "Cerrada externamente (detectado al validar expiración)."
+            });
+          }
+        }
+      } catch (innerErr) {
+        console.error(`[SessionExpiry] Error al procesar expiración de posición #${pos.broker_position_id}:`, innerErr.message);
+      }
+    }
+  } catch (err) {
+    console.error("[SessionExpiry] Error en closeExpiredPositions:", err.message);
+  }
 }
