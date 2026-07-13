@@ -10,6 +10,27 @@ import { applyXauSmartFilter } from "../risk/xauSmartFilter.js";
 import { sendTelegramSignal } from "./telegramService.js";
 import { logOrderOpen } from "./tradingJournalService.js";
 
+function formatForexXproSymbolDisplayName(symbol) {
+  const clean = String(symbol || "").toUpperCase().trim();
+  const map = {
+    // Forex.com IDs
+    "402044083": "XAU/USD (Gold)",
+    "402044081": "XAU/USD (Gold Micro)",
+    "401449254": "EUR/USD",
+    "401203130": "GBP/USD",
+    "401203195": "USD/JPY",
+    "402044422": "BTC/USD (Bitcoin)",
+    
+    // Standard names
+    "XAUUSD": "XAU/USD (Gold)",
+    "EURUSD": "EUR/USD",
+    "GBPUSD": "GBP/USD",
+    "USDJPY": "USD/JPY",
+    "BTCUSD": "BTC/USD (Bitcoin)"
+  };
+  return map[clean] || clean;
+}
+
 const ALLOWED_SIGNALS = [
   "SCALP_000",
   "SCALP_005",
@@ -196,7 +217,7 @@ export async function createXauScalpPrediction({
     sendTelegramSignal(
       {
         id: inserted.rows[0].id,
-        symbol: symbol,
+        symbol: formatForexXproSymbolDisplayName(symbol),
         predicted_direction: aiResult.direction,
         entry_price: indicators.lastPrice
       },

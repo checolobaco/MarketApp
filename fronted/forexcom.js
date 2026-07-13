@@ -33,6 +33,8 @@ const accEquity = document.getElementById("acc-equity");
 const accMargin = document.getElementById("acc-margin");
 const accUnrealizedPnl = document.getElementById("acc-unrealized-pnl");
 const accLeverage = document.getElementById("acc-leverage");
+const btnRefreshAccount = document.getElementById("btn-refresh-account");
+const chkRealtimePnl = document.getElementById("chk-realtime-pnl");
 
 const marketSelect = document.getElementById("market-select");
 const marketSearchQuery = document.getElementById("market-search-query");
@@ -131,6 +133,37 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (sessionToken && sessionUsername) {
     loadAllData();
     loadAutomationSettings();
+  }
+
+  if (btnRefreshAccount) {
+    btnRefreshAccount.addEventListener("click", async () => {
+      btnRefreshAccount.disabled = true;
+      btnRefreshAccount.innerHTML = "Actualizando... 🔄";
+      try {
+        await Promise.all([
+          loadAccountDetails(),
+          loadPositions()
+        ]);
+        showToast("Información de cuenta y P&L flotante actualizados");
+      } catch (err) {
+        showToast("Error al actualizar información", "error");
+      } finally {
+        btnRefreshAccount.disabled = false;
+        btnRefreshAccount.innerHTML = "Actualizar 🔄";
+      }
+    });
+  }
+
+  if (chkRealtimePnl) {
+    chkRealtimePnl.addEventListener("change", () => {
+      if (chkRealtimePnl.checked) {
+        startRealtimePnlPolling();
+        showToast("P&L flotante en tiempo real activado");
+      } else {
+        stopRealtimePnlPolling();
+        showToast("P&L flotante en tiempo real desactivado");
+      }
+    });
   }
 });
 
@@ -363,6 +396,8 @@ function updateSessionUI() {
     passwordInput.disabled = true;
     appkeyInput.disabled = true;
     envSelect.disabled = true;
+    
+    startRealtimePnlPolling();
   } else {
     sessionStatusText.innerText = "Desconectado";
     sessionStatusDot.className = "status-dot disconnected";
@@ -379,6 +414,8 @@ function updateSessionUI() {
     passwordInput.disabled = false;
     appkeyInput.disabled = false;
     envSelect.disabled = false;
+    
+    stopRealtimePnlPolling();
   }
 }
 
@@ -685,7 +722,7 @@ async function loadPositions() {
     if (result.ok && result.data && Array.isArray(result.data.OpenPositions)) {
       const positions = result.data.OpenPositions;
       if (positions.length === 0) {
-        positionsTableBody.innerHTML = `<tr><td colspan="8" class="muted" style="padding: 16px; text-align: center;">No hay posiciones abiertas</td></tr>`;
+        positionsTableBody.innerHTML = `<tr><td colspan="9" class="muted" style="padding: 16px; text-align: center;">No hay posiciones abiertas</td></tr>`;
         return;
       }
 
@@ -693,6 +730,7 @@ async function loadPositions() {
         const isBuy = pos.Direction === "buy";
         const typeBadge = isBuy ? '<span class="badge-buy">COMPRA</span>' : '<span class="badge-sell">VENTA</span>';
         const pId = pos.OrderId || pos.PositionId;
+        const predictionId = pos.PredictionId ? `#${pos.PredictionId}` : '<span class="muted">-</span>';
         
         // Resolver SL/TP buscando en todas las posibles estructuras del DTO de CIAPI
         const slPrice = pos.StopLoss || pos.StopOrder?.TriggerPrice || pos.AssociatedOrders?.Stop?.TriggerPrice || null;
@@ -707,6 +745,7 @@ async function loadPositions() {
         return `
           <tr style="border-bottom: 1px solid var(--border);">
             <td style="padding: 12px;">${pId}</td>
+            <td style="padding: 12px; font-weight: bold; color: var(--accent);">${predictionId}</td>
             <td style="padding: 12px; font-weight: bold;">${pos.MarketName || pos.MarketId}</td>
             <td style="padding: 12px;">${typeBadge}</td>
             <td style="padding: 12px;">${pos.Quantity}</td>
@@ -1140,5 +1179,33 @@ async function loadLocalCandleChart(symbolName, predictionData = null) {
     }
   } catch (error) {
     console.error("Error al cargar gráfico interactivo:", error);
+  }
+}
+
+let realtimePnlInterval = null;
+
+function startRealtimePnlPolling() {
+  stopRealtimePnlPolling();
+  if (!chkRealtimePnl || !chkRealtimePnl.checked) return;
+  if (!sessionToken) return;
+
+  realtimePnlInterval = setInterval(async () => {
+    try {
+      if (sessionToken) {
+        await Promise.all([
+          loadAccountDetails(),
+          loadPositions()
+        ]);
+      }
+    } catch (e) {
+      console.warn("Error in real-time P&L polling:", e);
+    }
+  }, 5000); // 5 segundos
+}
+
+function stopRealtimePnlPolling() {
+  if (realtimePnlInterval) {
+    clearInterval(realtimePnlInterval);
+    realtimePnlInterval = null;
   }
 }

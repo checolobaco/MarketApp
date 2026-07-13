@@ -14,6 +14,18 @@ function getClient(req) {
   return new XproClient({ token });
 }
 
+function formatXproSymbolDisplayName(symbol) {
+  const clean = String(symbol || "").toUpperCase().trim();
+  const map = {
+    "XAUUSD": "XAU/USD (Gold)",
+    "EURUSD": "EUR/USD",
+    "GBPUSD": "GBP/USD",
+    "USDJPY": "USD/JPY",
+    "BTCUSD": "BTC/USD (Bitcoin)"
+  };
+  return map[clean] || clean;
+}
+
 // 1. Verify Connection / Auth Status
 router.get("/auth/status", async (req, res) => {
   try {
@@ -270,7 +282,7 @@ router.post("/predict", async (req, res) => {
       sendTelegramSignal(
         {
           id: dbResult.rows[0].id,
-          symbol: cleanSymbol,
+          symbol: formatXproSymbolDisplayName(cleanSymbol),
           predicted_direction: aiResult.direction === "SUBE" ? "BUY" : "SELL",
           entry_price: lastPrice
         },
@@ -471,29 +483,31 @@ router.post("/predict_scalp", async (req, res) => {
       ]
     );
     
-    // Send Telegram Notification
-    try {
-      const { sendTelegramSignal } = await import("../services/telegramService.js");
-      sendTelegramSignal(
-        {
-          id: dbResult.rows[0].id,
-          symbol: cleanSymbol,
-          predicted_direction: direction,
-          entry_price: indicators.lastPrice
-        },
-        {
-          take_profit_1: tp,
-          take_profit_2: indicators.take_profit_2 || tp,
-          stop_loss: sl,
-          risk_reward: indicators.risk_reward || 2.4
-        },
-        {
-          trade_quality: tradeQuality.trade_quality,
-          trade_score: tradeQuality.trade_score
-        }
-      ).catch(err => console.error("Error Telegram scalp señal:", err));
-    } catch (tgErr) {
-      console.error("Error Telegram scalp:", tgErr.message);
+    // Send Telegram Notification ONLY if smart allowed is true
+    if (smartFilter && smartFilter.smart_allowed === true) {
+      try {
+        const { sendTelegramSignal } = await import("../services/telegramService.js");
+        sendTelegramSignal(
+          {
+            id: dbResult.rows[0].id,
+            symbol: formatXproSymbolDisplayName(cleanSymbol),
+            predicted_direction: direction,
+            entry_price: indicators.lastPrice
+          },
+          {
+            take_profit_1: tp,
+            take_profit_2: indicators.take_profit_2 || tp,
+            stop_loss: sl,
+            risk_reward: indicators.risk_reward || 2.4
+          },
+          {
+            trade_quality: tradeQuality.trade_quality,
+            trade_score: tradeQuality.trade_score
+          }
+        ).catch(err => console.error("Error Telegram scalp señal:", err));
+      } catch (tgErr) {
+        console.error("Error Telegram scalp:", tgErr.message);
+      }
     }
     
     res.json({

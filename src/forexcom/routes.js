@@ -380,6 +380,20 @@ router.get("/positions", async (req, res) => {
     const enrichedPositions = await Promise.all(openPositions.map(async (pos) => {
       const pId = pos.OrderId || pos.PositionId;
       
+      // Buscar prediction_id en trading_journal
+      let predictionId = null;
+      try {
+        const dbRes = await pool.query(
+          "SELECT prediction_id FROM trading_journal WHERE broker_position_id = $1 LIMIT 1",
+          [String(pId)]
+        );
+        if (dbRes.rows.length > 0) {
+          predictionId = dbRes.rows[0].prediction_id;
+        }
+      } catch (dbErr) {
+        console.warn(`[positions] Error querying prediction_id for position ${pId}:`, dbErr.message);
+      }
+
       // Buscar la orden de trade correspondiente
       const matchingOrder = activeOrders.find(item => {
         const order = item.TradeOrder;
@@ -464,7 +478,8 @@ router.get("/positions", async (req, res) => {
         StopLoss: stopLoss,
         TakeProfit: takeProfit,
         ProfitLoss: profitLoss,
-        CurrentPrice: currentPrice
+        CurrentPrice: currentPrice,
+        PredictionId: predictionId
       };
     }));
 
@@ -771,7 +786,7 @@ router.post("/predict", async (req, res) => {
       sendTelegramSignal(
         {
           id: dbResult.rows[0].id,
-          symbol: cleanSymbol,
+          symbol: market ? `${market.name} (${cleanSymbol})` : cleanSymbol,
           predicted_direction: aiResult.direction === "SUBE" ? "BUY" : "SELL",
           entry_price: lastPrice
         },
@@ -957,29 +972,35 @@ router.post("/predict_scalp", async (req, res) => {
       ]
     );
     
-    // Send Telegram Notification
-    try {
-      const { sendTelegramSignal } = await import("../services/telegramService.js");
-      sendTelegramSignal(
-        {
-          id: dbResult.rows[0].id,
-          symbol: cleanSymbol,
-          predicted_direction: direction,
-          entry_price: indicators.lastPrice
-        },
-        {
-          take_profit_1: tp,
-          take_profit_2: indicators.take_profit_2 || tp,
-          stop_loss: sl,
-          risk_reward: indicators.risk_reward || 2.4
-        },
-        {
-          trade_quality: tradeQuality.trade_quality,
-          trade_score: tradeQuality.trade_score
-        }
-      ).catch(err => console.error("Error Telegram scalp señal:", err));
-    } catch (tgErr) {
-      console.error("Error Telegram scalp:", tgErr.message);
+    // Send Telegram Notification ONLY if smart allowed is true
+    if (smartFilter && smartFilter.smart_allowed === true) {
+      try {
+        const client = getClient(req);
+        const market = await resolveSymbolToMarket(client, cleanSymbol).catch(() => null);
+        const symbolDisplay = market ? `${market.name} (${cleanSymbol})` : cleanSymbol;
+
+        const { sendTelegramSignal } = await import("../services/telegramService.js");
+        sendTelegramSignal(
+          {
+            id: dbResult.rows[0].id,
+            symbol: symbolDisplay,
+            predicted_direction: direction,
+            entry_price: indicators.lastPrice
+          },
+          {
+            take_profit_1: tp,
+            take_profit_2: indicators.take_profit_2 || tp,
+            stop_loss: sl,
+            risk_reward: indicators.risk_reward || 2.4
+          },
+          {
+            trade_quality: tradeQuality.trade_quality,
+            trade_score: tradeQuality.trade_score
+          }
+        ).catch(err => console.error("Error Telegram scalp señal:", err));
+      } catch (tgErr) {
+        console.error("Error Telegram scalp:", tgErr.message);
+      }
     }
     
     res.json({

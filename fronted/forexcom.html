@@ -183,9 +183,15 @@
               </form>
             </section>
 
-            <!-- Datos de la Cuenta -->
             <section class="panel" id="account-panel" style="display: none;">
-              <h3>Resumen de Cuenta</h3>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="margin: 0;">Resumen de Cuenta</h3>
+                <button class="button secondary" id="btn-refresh-account" style="padding: 4px 10px; font-size: 11px; height: 26px; line-height: 1;" type="button">Actualizar 🔄</button>
+              </div>
+              <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="chk-realtime-pnl" checked style="width: 16px; height: 16px; min-height: 16px; accent-color: var(--accent); cursor: pointer;" />
+                <label for="chk-realtime-pnl" style="font-size: 0.85em; cursor: pointer; color: var(--text); user-select: none; font-weight: normal; margin: 0;">Ver P&L flotante en tiempo real</label>
+              </div>
               <div style="display: grid; gap: 8px;">
                 <div>
                   <small class="muted">Balance</small>
@@ -451,6 +457,7 @@
                   <thead>
                     <tr style="border-bottom: 1px solid var(--border);">
                       <th style="padding: 12px;">ID Posición</th>
+                      <th style="padding: 12px;">ID Predicción</th>
                       <th style="padding: 12px;">Mercado ID</th>
                       <th style="padding: 12px;">Dirección</th>
                       <th style="padding: 12px;">Cantidad</th>
@@ -462,7 +469,7 @@
                   </thead>
                   <tbody id="positions-table-body">
                     <tr>
-                      <td colspan="8" class="muted" style="padding: 16px; text-align: center;">
+                      <td colspan="9" class="muted" style="padding: 16px; text-align: center;">
                         No hay posiciones abiertas
                       </td>
                     </tr>
