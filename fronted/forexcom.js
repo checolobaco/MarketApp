@@ -32,6 +32,7 @@ const accBalance = document.getElementById("acc-balance");
 const accEquity = document.getElementById("acc-equity");
 const accMargin = document.getElementById("acc-margin");
 const accUnrealizedPnl = document.getElementById("acc-unrealized-pnl");
+const accRealizedPnl = document.getElementById("acc-realized-pnl");
 const accLeverage = document.getElementById("acc-leverage");
 const btnRefreshAccount = document.getElementById("btn-refresh-account");
 const chkRealtimePnl = document.getElementById("chk-realtime-pnl");
@@ -524,6 +525,13 @@ async function loadAccountDetails() {
       const unrealized = Number(data.UnrealizedPnl || 0);
       accUnrealizedPnl.innerText = `$${unrealized.toFixed(2)}`;
       accUnrealizedPnl.style.color = unrealized >= 0 ? "#2ecc71" : "#e74c3c";
+
+      const realized = Number(data.TotalRealizedPnl || 0);
+      if (accRealizedPnl) {
+        accRealizedPnl.innerText = `$${realized.toFixed(2)}`;
+        accRealizedPnl.style.color = realized >= 0 ? "#2ecc71" : "#e74c3c";
+      }
+
       accLeverage.innerText = `1:${data.Leverage}`;
     }
   } catch (error) {

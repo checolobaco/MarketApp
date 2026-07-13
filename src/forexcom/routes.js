@@ -210,6 +210,22 @@ router.get("/account", async (req, res) => {
     const client = getClient(req);
     const margin = await client.getAccountMarginInfo();
     
+    // Obtener P&L realizado acumulado desde el broker
+    let totalRealizedPnl = 0;
+    try {
+      const tradingAccountId = await client.getTradingAccountId();
+      const historyRes = await client.getTradeHistory(tradingAccountId, 200);
+      const trades = historyRes?.TradeHistory || [];
+      totalRealizedPnl = trades.reduce((acc, t) => {
+        if (t.RealisedPnl !== null && t.RealisedPnl !== undefined) {
+          return acc + Number(t.RealisedPnl);
+        }
+        return acc;
+      }, 0);
+    } catch (historyErr) {
+      console.warn("[account] No se pudo obtener la historia del broker para calcular P&L histórico:", historyErr.message);
+    }
+
     // Mapeamos los datos de Forex.com a un formato común
     const responseData = {
       Balance: margin.Cash || 0,
@@ -219,7 +235,8 @@ router.get("/account", async (req, res) => {
         ? margin.TradeableFunds 
         : ((margin.NetEquity || 0) - (margin.MarginRequirement || 0)),
       UnrealizedPnl: margin.OpenTradeEquity || 0,
-      Leverage: 100 // Forex.com leverage varía, ponemos 100 por defecto
+      Leverage: 100, // Forex.com leverage varía, ponemos 100 por defecto
+      TotalRealizedPnl: totalRealizedPnl
     };
 
     res.json({ ok: true, data: responseData });
