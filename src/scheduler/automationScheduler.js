@@ -443,7 +443,7 @@ _Registro automático por MarketApp._
 async function closeExpiredPositions() {
   try {
     const { rows } = await pool.query(
-      "SELECT id, symbol, action, volume, entry_price, status, source, prediction_id, broker_position_id, created_at FROM trading_journal WHERE status = 'OPEN'"
+      "SELECT id, symbol, action, volume, entry_price, status, source, prediction_id, broker_position_id, created_at FROM trading_journal WHERE status = 'OPEN' AND broker_position_id IS NOT NULL AND broker_position_id <> ''"
     );
 
     if (rows.length === 0) return;
