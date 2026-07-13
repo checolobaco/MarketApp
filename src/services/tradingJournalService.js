@@ -307,3 +307,34 @@ export async function logOrderClose({
     return false;
   }
 }
+
+/**
+ * Obtiene el score de trading más alto de cualquier posición abierta actualmente para el símbolo dado.
+ */
+export async function getHighestOpenTradeScore(symbol) {
+  try {
+    const cleanSymbol = String(symbol || "").toUpperCase().trim();
+    // Buscamos en scalp_predictions o en predictions la calidad / score de la señal abierta
+    const query = `
+      SELECT COALESCE(MAX(score), 0) AS max_open_score
+      FROM (
+        SELECT sp.trade_score AS score
+        FROM trading_journal tj
+        INNER JOIN scalp_predictions sp ON tj.prediction_id = sp.id
+        WHERE tj.symbol = $1 AND tj.status = 'OPEN'
+        UNION ALL
+        SELECT p.trade_score AS score
+        FROM trading_journal tj
+        INNER JOIN predictions p ON tj.prediction_id = p.id
+        WHERE tj.symbol = $1 AND tj.status = 'OPEN'
+      ) sub
+    `;
+    const { rows } = await pool.query(query, [cleanSymbol]);
+    const maxScore = Number(rows[0].max_open_score) || 0;
+    return maxScore;
+  } catch (error) {
+    console.error("[Journal] Error al obtener score de posición abierta:", error.message);
+    return 0;
+  }
+}
+

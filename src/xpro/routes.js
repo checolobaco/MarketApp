@@ -4,7 +4,7 @@ import { XproClient } from "./client.js";
 import { getMarketData } from "../data_provider/marketData.js";
 import { calculateIndicators } from "../indicators/indicators.js";
 import { analyzeWithGemini } from "../ai/geminiAnalysis.js";
-import { logOrderOpen, logOrderClose } from "../services/tradingJournalService.js";
+import { logOrderOpen, logOrderClose, getHighestOpenTradeScore } from "../services/tradingJournalService.js";
 
 const router = express.Router();
 
@@ -387,6 +387,14 @@ router.post("/predict_scalp", async (req, res) => {
     const tradeQuality = calculateXauTradeQuality(indicators, aiResult, riskFilter, macroRisk, { date: new Date() });
     const smartFilter = applyXauSmartFilter({ indicators, aiResult, riskFilter, tradeQuality, macroRisk });
     
+    if (smartFilter.smart_allowed) {
+      const maxOpenScore = await getHighestOpenTradeScore(cleanSymbol);
+      if (tradeQuality.trade_score <= maxOpenScore) {
+        smartFilter.smart_allowed = false;
+        smartFilter.smart_blocked_reason = `Posición abierta existente con score igual/superior (${maxOpenScore})`;
+      }
+    }
+    
     // Set Target Check Time based on 15 minutes (scalping)
     const sl = indicators.stop_loss;
     const tp = indicators.take_profit_1; // Scalp uses take_profit_1 as first target
@@ -396,7 +404,7 @@ router.post("/predict_scalp", async (req, res) => {
     
     // 6. Place order if auto-trade is enabled, direction is clear, and smart filter allows it
     const direction = aiResult.direction; // BUY, SELL, NEUTRAL
-    if (autoTrade && (direction === "BUY" || direction === "SELL") && smartFilter.allowed) {
+    if (autoTrade && (direction === "BUY" || direction === "SELL") && smartFilter.smart_allowed) {
       const client = getClient(req);
       const action = direction; // BUY or SELL
       const tradeVolume = volume ? Number(volume) : 0.01;

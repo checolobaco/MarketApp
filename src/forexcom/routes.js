@@ -4,7 +4,7 @@ import { ForexComClient } from "./client.js";
 import { getMarketData } from "../data_provider/marketData.js";
 import { calculateIndicators } from "../indicators/indicators.js";
 import { analyzeWithGemini } from "../ai/geminiAnalysis.js";
-import { logOrderOpen, logOrderClose } from "../services/tradingJournalService.js";
+import { logOrderOpen, logOrderClose, getHighestOpenTradeScore } from "../services/tradingJournalService.js";
 
 const router = express.Router();
 
@@ -210,21 +210,9 @@ router.get("/account", async (req, res) => {
     const client = getClient(req);
     const margin = await client.getAccountMarginInfo();
     
-    // Obtener P&L realizado acumulado desde el broker
-    let totalRealizedPnl = 0;
-    try {
-      const tradingAccountId = await client.getTradingAccountId();
-      const historyRes = await client.getTradeHistory(tradingAccountId, 200);
-      const trades = historyRes?.TradeHistory || [];
-      totalRealizedPnl = trades.reduce((acc, t) => {
-        if (t.RealisedPnl !== null && t.RealisedPnl !== undefined) {
-          return acc + Number(t.RealisedPnl);
-        }
-        return acc;
-      }, 0);
-    } catch (historyErr) {
-      console.warn("[account] No se pudo obtener la historia del broker para calcular P&L histórico:", historyErr.message);
-    }
+    // Obtener P&L realizado acumulado en base a Balance - Depositos
+    const totalDeposits = Number(process.env.FOREX_TOTAL_DEPOSITS || 50000);
+    const totalRealizedPnl = (margin.Cash || 0) - totalDeposits;
 
     // Mapeamos los datos de Forex.com a un formato común
     const responseData = {
@@ -914,6 +902,14 @@ router.post("/predict_scalp", async (req, res) => {
     
     const tradeQuality = calculateXauTradeQuality(indicators, aiResult, riskFilter, macroRisk, { date: new Date() });
     const smartFilter = applyXauSmartFilter({ indicators, aiResult, riskFilter, tradeQuality, macroRisk });
+    
+    if (smartFilter.smart_allowed) {
+      const maxOpenScore = await getHighestOpenTradeScore(cleanSymbol);
+      if (tradeQuality.trade_score <= maxOpenScore) {
+        smartFilter.smart_allowed = false;
+        smartFilter.smart_blocked_reason = `Posición abierta existente con score igual/superior (${maxOpenScore})`;
+      }
+    }
     
     const sl = indicators.stop_loss;
     const tp = indicators.take_profit_1;

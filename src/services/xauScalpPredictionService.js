@@ -8,7 +8,7 @@ import { calculateXauTradeQuality } from "../risk/xauTradeQuality.js";
 import { shouldUseGeminiForXau } from "../risk/xauGeminiGate.js";
 import { applyXauSmartFilter } from "../risk/xauSmartFilter.js";
 import { sendTelegramSignal } from "./telegramService.js";
-import { logOrderOpen } from "./tradingJournalService.js";
+import { logOrderOpen, getHighestOpenTradeScore } from "./tradingJournalService.js";
 
 function formatForexXproSymbolDisplayName(symbol) {
   const clean = String(symbol || "").toUpperCase().trim();
@@ -127,6 +127,14 @@ export async function createXauScalpPrediction({
     tradeQuality,
     macroRisk
   });
+
+  if (smartFilter.smart_allowed) {
+    const maxOpenScore = await getHighestOpenTradeScore(symbol);
+    if (tradeQuality.trade_score <= maxOpenScore) {
+      smartFilter.smart_allowed = false;
+      smartFilter.smart_blocked_reason = `Posición abierta existente con score igual/superior (${maxOpenScore})`;
+    }
+  }
 
   if (macroRisk.macro_risk === "VERY_HIGH") {
     riskFilter.should_enter = false;
