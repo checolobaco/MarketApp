@@ -322,9 +322,17 @@ function getQuoteCurrency(marketName, marketId) {
   return "USD";
 }
 
+// Cache para tasas de conversión a USD (30 segundos)
+const usdRateCache = {};
+
 // Helper para obtener tasa de conversión a USD para divisas secundarias
 async function getUsdConversionRate(client, quoteCurrency) {
   if (!quoteCurrency || quoteCurrency === "USD") return 1.0;
+
+  const now = Date.now();
+  if (usdRateCache[quoteCurrency] && (now - usdRateCache[quoteCurrency].timestamp < 30000)) {
+    return usdRateCache[quoteCurrency].rate;
+  }
   
   // IDs de mercado para pares de conversión contra USD en Forex.com
   const conversionMarkets = {
@@ -337,29 +345,39 @@ async function getUsdConversionRate(client, quoteCurrency) {
   const marketId = conversionMarkets[quoteCurrency];
   if (!marketId) return 1.0;
 
+  let rate = null;
   try {
     const marketInfo = await client.getMarketInformation(marketId);
     const details = marketInfo?.MarketInformation || {};
     const price = details.Bid ? Number(details.Bid) : null;
     if (price) {
       if (quoteCurrency === "JPY") {
-        return 1.0 / price;
+        rate = 1.0 / price;
+      } else {
+        rate = price;
       }
-      return price;
     }
   } catch (e) {
     console.warn(`[getUsdConversionRate] No se pudo obtener tasa para ${quoteCurrency}:`, e.message);
   }
 
-  // Tasas fijas estimadas de fallback si el broker está offline o es fin de semana
-  const staticFallbacks = {
-    "JPY": 1.0 / 161.7,
-    "NZD": 0.61,
-    "GBP": 1.28,
-    "EUR": 1.09
-  };
-  return staticFallbacks[quoteCurrency] || 1.0;
+  if (rate === null) {
+    // Tasas fijas estimadas de fallback si el broker está offline o es fin de semana
+    const staticFallbacks = {
+      "JPY": 1.0 / 161.7,
+      "NZD": 0.61,
+      "GBP": 1.28,
+      "EUR": 1.09
+    };
+    rate = staticFallbacks[quoteCurrency] || 1.0;
+  }
+
+  usdRateCache[quoteCurrency] = { rate, timestamp: now };
+  return rate;
 }
+
+// Cache para mapear broker_position_id -> prediction_id en memoria (no cambia durante la vida de la orden)
+const predictionIdCache = {};
 
 // 8. Get Open Positions
 router.get("/positions", async (req, res) => {
@@ -380,18 +398,23 @@ router.get("/positions", async (req, res) => {
     const enrichedPositions = await Promise.all(openPositions.map(async (pos) => {
       const pId = pos.OrderId || pos.PositionId;
       
-      // Buscar prediction_id en trading_journal
-      let predictionId = null;
-      try {
-        const dbRes = await pool.query(
-          "SELECT prediction_id FROM trading_journal WHERE broker_position_id = $1 LIMIT 1",
-          [String(pId)]
-        );
-        if (dbRes.rows.length > 0) {
-          predictionId = dbRes.rows[0].prediction_id;
+      // Buscar prediction_id en cache o trading_journal
+      let predictionId = predictionIdCache[pId];
+      if (predictionId === undefined) {
+        try {
+          const dbRes = await pool.query(
+            "SELECT prediction_id FROM trading_journal WHERE broker_position_id = $1 LIMIT 1",
+            [String(pId)]
+          );
+          if (dbRes.rows.length > 0) {
+            predictionId = dbRes.rows[0].prediction_id;
+          } else {
+            predictionId = null;
+          }
+          predictionIdCache[pId] = predictionId;
+        } catch (dbErr) {
+          console.warn(`[positions] Error querying prediction_id for position ${pId}:`, dbErr.message);
         }
-      } catch (dbErr) {
-        console.warn(`[positions] Error querying prediction_id for position ${pId}:`, dbErr.message);
       }
 
       // Buscar la orden de trade correspondiente
