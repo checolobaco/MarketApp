@@ -1,5 +1,34 @@
-// src/services/telegramService.js
 import { pool } from "../db.js";
+
+export function cleanAndTranslateSymbol(symbol) {
+  const str = String(symbol || "").toUpperCase().trim();
+  
+  // Extraer cualquier número de 9 dígitos que represente el ID de Forex.com
+  const match = str.match(/\b(40\d{7})\b/);
+  const cleanId = match ? match[1] : str.replace(/[\/-]/g, "");
+
+  const symMap = {
+    // Forex.com IDs correctos (consultados del broker)
+    "402044083": "XAU/USD",
+    "402044081": "EUR/USD",
+    "401449254": "USD/JPY",
+    "401203130": "GBP/CAD",
+    "401203195": "USD/CAD",
+    "402044422": "BTC/USD",
+    "401483119": "ETH/USD",
+    "402044078": "US Tech 100",
+    
+    // Standard names
+    "XAUUSD": "XAU/USD",
+    "EURUSD": "EUR/USD",
+    "GBPUSD": "GBP/USD",
+    "USDJPY": "USD/JPY",
+    "BTCUSD": "BTC/USD",
+    "ETHUSD": "ETH/USD"
+  };
+
+  return symMap[cleanId] || symMap[str] || symbol;
+}
 
 export async function sendTelegramSignal(prediction, tradePlan, tradeQuality) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -10,25 +39,7 @@ export async function sendTelegramSignal(prediction, tradePlan, tradeQuality) {
     return;
   }
 
-  let symbol = prediction.symbol || "XAUUSD";
-  const cleanSym = String(symbol).toUpperCase().trim();
-  const symMap = {
-    // Forex.com IDs
-    "402044083": "XAU/USD (Gold)",
-    "402044081": "XAU/USD (Gold Micro)",
-    "401449254": "EUR/USD",
-    "401203130": "GBP/USD",
-    "401203195": "USD/JPY",
-    "402044422": "BTC/USD (Bitcoin)",
-    
-    // Standard names
-    "XAUUSD": "XAU/USD (Gold)",
-    "EURUSD": "EUR/USD",
-    "GBPUSD": "GBP/USD",
-    "USDJPY": "USD/JPY",
-    "BTCUSD": "BTC/USD (Bitcoin)"
-  };
-  symbol = symMap[cleanSym] || symbol;
+  let symbol = cleanAndTranslateSymbol(prediction.symbol || "XAUUSD");
 
   const emoji = prediction.predicted_direction === "BUY" ? "🟢 COMPRA (BUY)" : "🔴 VENTA (SELL)";
   const smartAllowedText = prediction.smart_allowed !== undefined
@@ -98,25 +109,7 @@ export async function sendTelegramCloseSignal(prediction, resultType, pipsResult
 
   if (!token || !chatId) return;
 
-  let symbol = prediction.symbol || "XAUUSD";
-  const cleanSym = String(symbol).toUpperCase().trim();
-  const symMap = {
-    // Forex.com IDs
-    "402044083": "XAU/USD (Gold)",
-    "402044081": "XAU/USD (Gold Micro)",
-    "401449254": "EUR/USD",
-    "401203130": "GBP/USD",
-    "401203195": "USD/JPY",
-    "402044422": "BTC/USD (Bitcoin)",
-    
-    // Standard names
-    "XAUUSD": "XAU/USD (Gold)",
-    "EURUSD": "EUR/USD",
-    "GBPUSD": "GBP/USD",
-    "USDJPY": "USD/JPY",
-    "BTCUSD": "BTC/USD (Bitcoin)"
-  };
-  symbol = symMap[cleanSym] || symbol;
+  let symbol = cleanAndTranslateSymbol(prediction.symbol || "XAUUSD");
 
   const direction = prediction.predicted_direction;
   const smartAllowedText = prediction.smart_allowed !== undefined

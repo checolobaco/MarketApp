@@ -314,6 +314,35 @@ export async function logOrderClose({
 export async function getHighestOpenTradeScore(symbol) {
   try {
     const cleanSymbol = String(symbol || "").toUpperCase().trim();
+    
+    // Normalizar símbolos equivalentes para cruzar IDs del broker con tickers estándar
+    const getEquivalentSymbols = (sym) => {
+      const clean = sym.replace(/[\/-]/g, "");
+      // Oro / Gold
+      if (["XAUUSD", "402044083", "402044081", "GOLD", "GC=F", "401203119"].includes(clean)) {
+        return ["XAUUSD", "402044083", "402044081", "GOLD", "GC=F", "401203119"];
+      }
+      // EURUSD
+      if (["EURUSD", "401449254", "401483120", "EUR/USD"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
+        return ["EURUSD", "401449254", "401483120", "EUR/USD", "EUR_USD"];
+      }
+      // GBPUSD
+      if (["GBPUSD", "401203130", "GBP/USD"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
+        return ["GBPUSD", "401203130", "GBP/USD", "GBP_USD"];
+      }
+      // USDJPY
+      if (["USDJPY", "401203195", "USD/JPY"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
+        return ["USDJPY", "401203195", "USD/JPY", "USD_JPY"];
+      }
+      // BTCUSD
+      if (["BTCUSD", "402044422", "BTC/USD"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
+        return ["BTCUSD", "402044422", "BTC/USD", "BTC_USD"];
+      }
+      return [sym, clean];
+    };
+
+    const equivalents = getEquivalentSymbols(cleanSymbol);
+
     // Buscamos en scalp_predictions o en predictions la calidad / score de la señal abierta
     const query = `
       SELECT COALESCE(MAX(score), 0) AS max_open_score
@@ -321,15 +350,15 @@ export async function getHighestOpenTradeScore(symbol) {
         SELECT sp.trade_score AS score
         FROM trading_journal tj
         INNER JOIN scalp_predictions sp ON tj.prediction_id = sp.id
-        WHERE tj.symbol = $1 AND tj.status = 'OPEN'
+        WHERE tj.symbol = ANY($1) AND tj.status = 'OPEN'
         UNION ALL
         SELECT p.trade_score AS score
         FROM trading_journal tj
         INNER JOIN predictions p ON tj.prediction_id = p.id
-        WHERE tj.symbol = $1 AND tj.status = 'OPEN'
+        WHERE tj.symbol = ANY($1) AND tj.status = 'OPEN'
       ) sub
     `;
-    const { rows } = await pool.query(query, [cleanSymbol]);
+    const { rows } = await pool.query(query, [equivalents]);
     const maxScore = Number(rows[0].max_open_score) || 0;
     return maxScore;
   } catch (error) {

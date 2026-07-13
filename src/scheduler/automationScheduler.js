@@ -527,24 +527,7 @@ async function closeExpiredPositions() {
               notes: "Cierre automático al vencimiento de sesión (30 minutos)."
             });
 
-            const { rows: updatedRows } = await pool.query(
-              "SELECT symbol, action, volume, entry_price, exit_price, pips_result, profit_loss_usd, prediction_id FROM trading_journal WHERE broker_position_id = $1 ORDER BY id DESC LIMIT 1",
-              [String(pos.broker_position_id)]
-            );
-
-            if (updatedRows.length > 0) {
-              const r = updatedRows[0];
-              await sendTelegramSessionExpiredAlert({
-                symbol: r.symbol,
-                direction: r.action,
-                volume: Number(r.volume),
-                entryPrice: Number(r.entry_price),
-                exitPrice: Number(r.exit_price),
-                profitLossUsd: Number(r.profit_loss_usd),
-                pips: Number(r.pips_result),
-                predictionId: r.prediction_id
-              });
-            }
+            // Cerrado en broker y guardado en diario local. Evitamos doble envío a Telegram delegando al motor de backtesting.
           } else {
             console.log(`[SessionExpiry] La posición #${pos.broker_position_id} ya no está activa en Forex.com. Cerrando localmente en DB.`);
             
@@ -584,24 +567,7 @@ async function closeExpiredPositions() {
               notes: "Cierre automático al vencimiento de sesión (30 minutos)."
             });
 
-            const { rows: updatedRows } = await pool.query(
-              "SELECT symbol, action, volume, entry_price, exit_price, pips_result, profit_loss_usd, prediction_id FROM trading_journal WHERE broker_position_id = $1 ORDER BY id DESC LIMIT 1",
-              [String(pos.broker_position_id)]
-            );
-
-            if (updatedRows.length > 0) {
-              const r = updatedRows[0];
-              await sendTelegramSessionExpiredAlert({
-                symbol: r.symbol,
-                direction: r.action,
-                volume: Number(r.volume),
-                entryPrice: Number(r.entry_price),
-                exitPrice: Number(r.exit_price),
-                profitLossUsd: Number(r.profit_loss_usd),
-                pips: Number(r.pips_result),
-                predictionId: r.prediction_id
-              });
-            }
+            // Cerrado en broker y guardado en diario local. Evitamos doble envío a Telegram delegando al motor de backtesting.
           } else {
             console.log(`[SessionExpiry] La posición #${pos.broker_position_id} ya no está activa en XPRO. Cerrando localmente en DB.`);
             await logOrderClose({
