@@ -200,8 +200,8 @@ export class ForexComClient {
     return this.request("GET", "/useraccount/ClientAndTradingAccount");
   }
 
-  async getTradeHistory(tradingAccountId, maxResults = 100) {
-    return this.request("GET", `/order/tradehistory?TradingAccountId=${tradingAccountId}&maxResults=${maxResults}`);
+  async getTradeHistory(tradingAccountId, maxResults = 100, offset = 0) {
+    return this.request("GET", `/order/tradehistory?TradingAccountId=${tradingAccountId}&maxResults=${maxResults}&offset=${offset}`);
   }
 
   async getClientAccountId() {

@@ -204,6 +204,82 @@ router.get("/auth/status", async (req, res) => {
   }
 });
 
+// Función auxiliar para sincronizar el historial del broker en base de datos
+async function syncBrokerTradeHistory(client) {
+  try {
+    const tradingAccountId = await client.getTradingAccountId();
+    
+    let offset = 0;
+    const limit = 200;
+    let allTrades = [];
+    let hasMore = true;
+
+    while (hasMore) {
+      const historyRes = await client.getTradeHistory(tradingAccountId, limit, offset);
+      const trades = historyRes?.TradeHistory || [];
+      allTrades = allTrades.concat(trades);
+
+      if (trades.length < limit) {
+        hasMore = false;
+      } else {
+        offset += limit;
+      }
+
+      // Límite de seguridad
+      if (offset > 10000) {
+        hasMore = false;
+      }
+    }
+    
+    if (allTrades.length === 0) return;
+
+    // Helper para parsear la fecha de CIAPI
+    const parseCiapiDate = (dateStr) => {
+      if (!dateStr) return null;
+      const match = dateStr.match(/\/Date\((\d+)\)\//);
+      if (match) {
+        return new Date(Number(match[1]));
+      }
+      return new Date(dateStr);
+    };
+
+    for (const t of allTrades) {
+      const executedDate = parseCiapiDate(t.ExecutedDateTimeUtc);
+      
+      await pool.query(
+        `
+        INSERT INTO broker_trade_history (
+          order_id, market_id, market_name, direction, original_quantity,
+          price, trading_account_id, currency, realised_pnl, realised_pnl_currency,
+          executed_date_time
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT (order_id) DO UPDATE SET
+          realised_pnl = EXCLUDED.realised_pnl,
+          realised_pnl_currency = EXCLUDED.realised_pnl_currency,
+          executed_date_time = EXCLUDED.executed_date_time
+        `,
+        [
+          t.OrderId,
+          t.MarketId,
+          t.MarketName || "",
+          t.Direction || "",
+          Number(t.OriginalQuantity || 0),
+          Number(t.Price || 0),
+          t.TradingAccountId,
+          t.Currency || "",
+          t.RealisedPnl !== null && t.RealisedPnl !== undefined ? Number(t.RealisedPnl) : null,
+          t.RealisedPnlCurrency || "",
+          executedDate
+        ]
+      );
+    }
+    console.log(`[SyncHistory] Sincronización exitosa: ${allTrades.length} registros del broker procesados.`);
+  } catch (err) {
+    console.error("[SyncHistory] Error en la sincronización del historial:", err.message);
+  }
+}
+
 // 4. Get Account Information (Aligned with terminal dashboard fields)
 router.get("/account", async (req, res) => {
   try {
@@ -213,6 +289,9 @@ router.get("/account", async (req, res) => {
     // Obtener P&L realizado acumulado en base a Balance - Depositos
     const totalDeposits = Number(process.env.FOREX_TOTAL_DEPOSITS || 50000);
     const totalRealizedPnl = (margin.Cash || 0) - totalDeposits;
+
+    // Disparar sincronización de historial en segundo plano (asíncrona)
+    syncBrokerTradeHistory(client).catch(err => console.error("[SyncHistory] Background sync failed:", err.message));
 
     // Mapeamos los datos de Forex.com a un formato común
     const responseData = {
@@ -228,6 +307,17 @@ router.get("/account", async (req, res) => {
     };
 
     res.json({ ok: true, data: responseData });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// 4b. Sync Trade History manually
+router.post("/sync-history", async (req, res) => {
+  try {
+    const client = getClient(req);
+    await syncBrokerTradeHistory(client);
+    res.json({ ok: true, message: "Historial sincronizado con éxito." });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }

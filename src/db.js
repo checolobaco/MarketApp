@@ -61,8 +61,23 @@ const createTableQuery = `
     value JSONB NOT NULL,
     updated_at TIMESTAMP DEFAULT NOW()
   );
+
+  CREATE TABLE IF NOT EXISTS broker_trade_history (
+    order_id BIGINT PRIMARY KEY,
+    market_id INT NOT NULL,
+    market_name VARCHAR(100),
+    direction VARCHAR(10) NOT NULL,
+    original_quantity NUMERIC(15, 5) NOT NULL,
+    price NUMERIC(15, 5) NOT NULL,
+    trading_account_id INT NOT NULL,
+    currency VARCHAR(10),
+    realised_pnl NUMERIC(15, 5),
+    realised_pnl_currency VARCHAR(10),
+    executed_date_time TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
 `;
 
 pool.query(createTableQuery)
-  .then(() => console.log("Tablas api_logs, ai_cache y trading_journal inicializadas correctamente con soporte de costos."))
+  .then(() => console.log("Tablas api_logs, ai_cache, trading_journal y broker_trade_history inicializadas correctamente."))
   .catch((err) => console.error("Error al inicializar tablas:", err.message));
