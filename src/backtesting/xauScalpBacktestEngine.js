@@ -198,12 +198,24 @@ export async function runXauScalpBacktesting() {
         sendTelegramCloseSignal(prediction, resultType, finalRealPips, tpSl)
           .catch(err => console.error("Error Telegram cierre:", err));
 
-        logOrderClose({
-          predictionId: prediction.id,
-          exitPrice: exitPrice,
-          pipsResult: finalRealPips,
-          notes: `Motivo salida: ${tpSl.real_exit_reason}`
-        }).catch(err => console.error("Error al registrar cierre diario en backtesting:", err.message));
+        // Evitar cerrar el diario desde el backtester si la orden tiene un broker_position_id activo.
+        // Esto permite que el scheduler closeExpiredPositions la gestione y la cierre de verdad en el broker.
+        const { rows: journalRows } = await pool.query(
+          "SELECT id, broker_position_id FROM trading_journal WHERE prediction_id = $1 LIMIT 1",
+          [prediction.id]
+        );
+        const hasBrokerId = journalRows.length > 0 && journalRows[0].broker_position_id;
+
+        if (!hasBrokerId) {
+          logOrderClose({
+            predictionId: prediction.id,
+            exitPrice: exitPrice,
+            pipsResult: finalRealPips,
+            notes: `Motivo salida: ${tpSl.real_exit_reason}`
+          }).catch(err => console.error("Error al registrar cierre diario en backtesting:", err.message));
+        } else {
+          console.log(`[Backtest] Conservando orden abierta en diario para predicción #${prediction.id} porque tiene broker_position_id (${journalRows[0].broker_position_id}).`);
+        }
       }
 
       checked++;
