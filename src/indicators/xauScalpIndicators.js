@@ -219,9 +219,9 @@ function calculateScalpScore(signals) {
 export function buildTradePlan(price, atr, direction) {
   const safeAtr = atr || price * 0.001;
 
-  const stopDistance = safeAtr * 1.2; // Tighter SL (Option B)
-  const tp1Distance = safeAtr * 1.0;  // Target TP1 (Option B)
-  const tp2Distance = safeAtr * 1.8;
+  const stopDistance = safeAtr * 1.5; // SL a 1.5 * ATR para dar respiro
+  const tp1Distance = safeAtr * 0.5;  // TP1 ajustado a 0.5 * ATR para alta probabilidad
+  const tp2Distance = safeAtr * 1.2;  // TP2 ajustado a 1.2 * ATR
 
   if (direction === "BUY") {
     return {

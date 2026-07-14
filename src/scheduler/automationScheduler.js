@@ -13,6 +13,7 @@ import { pool } from "../db.js";
 import { logOrderClose } from "../services/tradingJournalService.js";
 import { ForexComClient } from "../forexcom/client.js";
 import { XproClient } from "../xpro/client.js";
+import { cleanAndTranslateSymbol } from "../services/telegramService.js";
 
 let isRunning = false;
 
@@ -60,6 +61,9 @@ export function startAutomationScheduler() {
 
       // — Validar y Cerrar Posiciones Expiradas (30 minutos) —
       await closeExpiredPositions();
+
+      // — Validar y Aplicar Breakeven a Posiciones Abiertas —
+      await applyBreakevenAndTrailingStop();
 
       markAutomationRun({ last_error: null });
     } catch (error) {
@@ -583,5 +587,207 @@ async function closeExpiredPositions() {
     }
   } catch (err) {
     console.error("[SessionExpiry] Error en closeExpiredPositions:", err.message);
+  }
+}
+
+async function sendTelegramBreakevenAlert(pos, entryPrice, newSl) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+
+  const displaySymbol = cleanAndTranslateSymbol(pos.symbol);
+  const directionEmoji = (pos.action || "").toUpperCase() === "BUY" ? "🟢 COMPRA" : "🔴 VENTA";
+
+  const message = `
+🛡️ *OPERACIÓN PROTEGIDA (BREAKEVEN)*
+────────────────────────
+*Instrumento*: ${displaySymbol}
+*Dirección*: ${directionEmoji}
+*Volumen*: ${pos.volume} lotes
+*Precio de Entrada*: $${entryPrice}
+*Nuevo Stop Loss*: $${newSl} (Ajustado a precio de entrada)
+
+_Riesgo eliminado para esta posición._
+`;
+
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: "Markdown"
+      })
+    });
+  } catch (err) {
+    console.error("Error al enviar alerta de breakeven a Telegram:", err.message);
+  }
+}
+
+async function applyBreakevenAndTrailingStop() {
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, symbol, action, volume, entry_price, status, source, prediction_id, broker_position_id, stop_loss FROM trading_journal WHERE status = 'OPEN' AND broker_position_id IS NOT NULL AND broker_position_id <> ''"
+    );
+
+    if (rows.length === 0) return;
+
+    // Instanciar clientes
+    // Forex.com
+    const envUser = process.env.FOREX_USERNAME;
+    const envPass = process.env.FOREX_PASSWORD;
+    const envAppKey = process.env.FOREX_APPKEY;
+    const sessionToken = process.env.FOREX_SESSION_TOKEN;
+    const forexClient = new ForexComClient({
+      username: envUser,
+      password: envPass,
+      appKey: envAppKey,
+      isDemo: process.env.FOREX_IS_DEMO === "true"
+    });
+    let forexLoggedIn = false;
+
+    // XPRO
+    const xproClient = new XproClient({ token: process.env.XPRO_API_KEY });
+
+    for (const pos of rows) {
+      try {
+        const entryPrice = Number(pos.entry_price);
+        const predictionId = pos.prediction_id;
+
+        // Obtener el ATR de la predicción
+        let atr = entryPrice * 0.001; // fallback
+        if (predictionId) {
+          const predRes = await pool.query("SELECT indicators FROM scalp_predictions WHERE id = $1", [predictionId]);
+          if (predRes.rows.length > 0) {
+            const ind = predRes.rows[0].indicators || {};
+            if (ind.atr && Number(ind.atr) > 0) {
+              atr = Number(ind.atr);
+            }
+          }
+        }
+
+        const isBuy = pos.action.toUpperCase() === "BUY" || pos.action.toUpperCase() === "COMPRA";
+        const triggerDistance = atr * 0.5;
+
+        if (pos.source === "FOREX_COM") {
+          // Iniciar sesión en Forex.com si aún no se ha hecho
+          if (!forexLoggedIn) {
+            if (sessionToken) {
+              forexClient.setSession(sessionToken, envUser);
+              forexLoggedIn = true;
+            } else if (envUser && (envPass || envAppKey)) {
+              const sessionInfo = await forexClient.login().catch(() => null);
+              if (sessionInfo && sessionInfo.sessionToken) {
+                forexLoggedIn = true;
+              }
+            }
+          }
+
+          if (!forexLoggedIn) continue;
+
+          // Obtener posiciones abiertas en el broker
+          const positionsResult = await forexClient.getOpenPositions().catch(() => null);
+          const openPositions = positionsResult?.OpenPositions || [];
+          const activePos = openPositions.find(p => String(p.OrderId || p.PositionId) === String(pos.broker_position_id));
+
+          if (activePos) {
+            // Obtener precio actual de bid/offer
+            const marketInfo = await forexClient.getMarketInformation(pos.symbol).catch(() => null);
+            const infoDetails = marketInfo?.MarketInformation || {};
+            const bid = infoDetails.Bid ? Number(infoDetails.Bid) : activePos.Price;
+            const offer = infoDetails.Offer ? Number(infoDetails.Offer) : activePos.Price;
+            
+            const currentExitPrice = isBuy ? bid : offer;
+            const currentSl = activePos.StopLoss || activePos.StopOrder?.TriggerPrice || activePos.AssociatedOrders?.Stop?.TriggerPrice || null;
+
+            if (isBuy) {
+              // Si subió a favor por al menos 0.5 * ATR
+              if (currentExitPrice >= entryPrice + triggerDistance) {
+                // Si el SL no está en breakeven (o no tiene SL)
+                if (currentSl === null || Number(currentSl) < entryPrice) {
+                  console.log(`[Breakeven] Aplicando SL a breakeven para Forex.com posición #${pos.broker_position_id} (Precio actual: ${currentExitPrice}, Entrada: ${entryPrice})`);
+                  await forexClient.modifyPosition({
+                    positionId: pos.broker_position_id,
+                    sl: entryPrice
+                  });
+                  await pool.query(
+                    "UPDATE trading_journal SET stop_loss = $1, notes = COALESCE(notes || ' | ', '') || 'Breakeven activado' WHERE id = $2",
+                    [entryPrice, pos.id]
+                  );
+                  await sendTelegramBreakevenAlert(pos, entryPrice, entryPrice);
+                }
+              }
+            } else {
+              // Para SELL: si cayó a favor por al menos 0.5 * ATR
+              if (currentExitPrice <= entryPrice - triggerDistance) {
+                if (currentSl === null || Number(currentSl) > entryPrice) {
+                  console.log(`[Breakeven] Aplicando SL a breakeven para Forex.com posición #${pos.broker_position_id} (Precio actual: ${currentExitPrice}, Entrada: ${entryPrice})`);
+                  await forexClient.modifyPosition({
+                    positionId: pos.broker_position_id,
+                    sl: entryPrice
+                  });
+                  await pool.query(
+                    "UPDATE trading_journal SET stop_loss = $1, notes = COALESCE(notes || ' | ', '') || 'Breakeven activado' WHERE id = $2",
+                    [entryPrice, pos.id]
+                  );
+                  await sendTelegramBreakevenAlert(pos, entryPrice, entryPrice);
+                }
+              }
+            }
+          }
+        } else if (pos.source === "XPRO_TERMINAL" || pos.source === "XPRO") {
+          const openPositions = await xproClient.getOpenPositions().catch(() => []);
+          const activePos = (Array.isArray(openPositions) ? openPositions : []).find(p => String(p.positionId || p.PositionId || p.position) === String(pos.broker_position_id));
+
+          if (activePos) {
+            const quote = await xproClient.getQuote(pos.symbol).catch(() => null);
+            const bid = quote?.bid ? Number(quote.bid) : null;
+            const offer = quote?.ask ? Number(quote.ask) : null;
+
+            if (bid && offer) {
+              const currentExitPrice = isBuy ? bid : offer;
+              const currentSl = activePos.sl || activePos.StopLoss || null;
+
+              if (isBuy) {
+                if (currentExitPrice >= entryPrice + triggerDistance) {
+                  if (currentSl === null || Number(currentSl) < entryPrice) {
+                    console.log(`[Breakeven] Aplicando SL a breakeven para XPRO posición #${pos.broker_position_id} (Precio actual: ${currentExitPrice}, Entrada: ${entryPrice})`);
+                    await xproClient.modifyPosition({
+                      positionId: pos.broker_position_id,
+                      sl: entryPrice
+                    });
+                    await pool.query(
+                      "UPDATE trading_journal SET stop_loss = $1, notes = COALESCE(notes || ' | ', '') || 'Breakeven activado' WHERE id = $2",
+                      [entryPrice, pos.id]
+                    );
+                    await sendTelegramBreakevenAlert(pos, entryPrice, entryPrice);
+                  }
+                }
+              } else {
+                if (currentExitPrice <= entryPrice - triggerDistance) {
+                  if (currentSl === null || Number(currentSl) > entryPrice) {
+                    console.log(`[Breakeven] Aplicando SL a breakeven para XPRO posición #${pos.broker_position_id} (Precio actual: ${currentExitPrice}, Entrada: ${entryPrice})`);
+                    await xproClient.modifyPosition({
+                      positionId: pos.broker_position_id,
+                      sl: entryPrice
+                    });
+                    await pool.query(
+                      "UPDATE trading_journal SET stop_loss = $1, notes = COALESCE(notes || ' | ', '') || 'Breakeven activado' WHERE id = $2",
+                      [entryPrice, pos.id]
+                    );
+                    await sendTelegramBreakevenAlert(pos, entryPrice, entryPrice);
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (posErr) {
+        console.error(`[Breakeven] Error al procesar posición #${pos.broker_position_id}:`, posErr.message);
+      }
+    }
+  } catch (err) {
+    console.error("[Breakeven] Error en applyBreakevenAndTrailingStop:", err.message);
   }
 }

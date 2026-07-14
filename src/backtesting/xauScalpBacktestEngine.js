@@ -39,12 +39,13 @@ export async function runXauScalpBacktesting() {
         ? Number(candles[candles.length - 1].close)
         : await getCurrentPrice(prediction.symbol || "XAUUSD");
 
-      const actualDirection = getActualDirection(entryPrice, exitPrice);
+      const actualDirection = getActualDirection(entryPrice, exitPrice, prediction.symbol);
 
       const pipsResult = calculatePipsResult(
         prediction.predicted_direction,
         entryPrice,
-        exitPrice
+        exitPrice,
+        prediction.symbol
       );
 
       const windowStats = calculateWindowStatsFromCandles(
@@ -270,15 +271,15 @@ function calculateWindowStatsFromCandles(candles, prediction) {
 
   if (prediction.predicted_direction === "BUY") {
     return {
-      maxGainPips: calculatePips(highestHigh - entryPrice),
-      maxLossPips: calculatePips(lowestLow - entryPrice)
+      maxGainPips: calculatePips(highestHigh - entryPrice, prediction.symbol),
+      maxLossPips: calculatePips(lowestLow - entryPrice, prediction.symbol)
     };
   }
 
   if (prediction.predicted_direction === "SELL") {
     return {
-      maxGainPips: calculatePips(entryPrice - lowestLow),
-      maxLossPips: calculatePips(entryPrice - highestHigh)
+      maxGainPips: calculatePips(entryPrice - lowestLow, prediction.symbol),
+      maxLossPips: calculatePips(entryPrice - highestHigh, prediction.symbol)
     };
   }
 
@@ -288,11 +289,28 @@ function calculateWindowStatsFromCandles(candles, prediction) {
   };
 }
 
-function getActualDirection(entryPrice, exitPrice) {
-  const pips = calculatePips(exitPrice - entryPrice);
+function getPipMultiplier(symbol) {
+  const clean = String(symbol || "").toUpperCase().trim();
+  
+  if (["402044081", "EURUSD", "EUR/USD"].includes(clean)) return 10000;
+  if (["402044082", "GBPUSD", "GBP/USD"].includes(clean)) return 10000;
+  if (["401203127", "EURNZD", "EUR/NZD"].includes(clean)) return 10000;
+  if (["401449254", "USDJPY", "USD/JPY"].includes(clean)) return 100;
+  if (["402044083", "XAUUSD", "XAU/USD", "GOLD"].includes(clean)) return 10;
+  if (["402044422", "BTCUSD", "BITCOIN", "BTC"].includes(clean)) return 1;
+  
+  if (clean.includes("JPY")) return 100;
+  if (clean.includes("/") || clean.length === 6) return 10000;
+  return 10;
+}
 
-  if (pips >= 15) return "BUY";
-  if (pips <= -15) return "SELL";
+function getActualDirection(entryPrice, exitPrice, symbol) {
+  const pips = calculatePips(exitPrice - entryPrice, symbol);
+  const multiplier = getPipMultiplier(symbol);
+  const threshold = (multiplier === 10000 || multiplier === 100) ? 5 : 15;
+
+  if (pips >= threshold) return "BUY";
+  if (pips <= -threshold) return "SELL";
 
   return "NEUTRAL";
 }
@@ -303,14 +321,15 @@ function getResultType(predicted, actual) {
   return "LOSS";
 }
 
-function calculatePipsResult(direction, entryPrice, exitPrice) {
-  if (direction === "BUY") return calculatePips(exitPrice - entryPrice);
-  if (direction === "SELL") return calculatePips(entryPrice - exitPrice);
+function calculatePipsResult(direction, entryPrice, exitPrice, symbol) {
+  if (direction === "BUY") return calculatePips(exitPrice - entryPrice, symbol);
+  if (direction === "SELL") return calculatePips(entryPrice - exitPrice, symbol);
   return 0;
 }
 
-function calculatePips(priceDiff) {
-  return Number((priceDiff * 10).toFixed(2));
+function calculatePips(priceDiff, symbol) {
+  const multiplier = getPipMultiplier(symbol);
+  return Number((priceDiff * multiplier).toFixed(2));
 }
 
 function calculatePercent(entryPrice, exitPrice, direction) {
