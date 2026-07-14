@@ -8,7 +8,7 @@ import { calculateXauTradeQuality } from "../risk/xauTradeQuality.js";
 import { shouldUseGeminiForXau } from "../risk/xauGeminiGate.js";
 import { applyXauSmartFilter } from "../risk/xauSmartFilter.js";
 import { sendTelegramSignal, cleanAndTranslateSymbol } from "./telegramService.js";
-import { logOrderOpen, getHighestOpenTradeScore } from "./tradingJournalService.js";
+import { getHighestOpenTradeScore } from "./tradingJournalService.js";
 
 function formatForexXproSymbolDisplayName(symbol) {
   return cleanAndTranslateSymbol(symbol);
@@ -222,18 +222,6 @@ export async function createXauScalpPrediction({
       tradeQuality
     ).catch(err => console.error("Error asincrono Telegram automatico:", err));
 
-    const logVolume = (volume !== null && volume !== undefined) ? volume : 0.1;
-    logOrderOpen({
-      symbol: symbol,
-      action: aiResult.direction,
-      volume: logVolume,
-      entryPrice: indicators.lastPrice,
-      stopLoss: tradePlan.stop_loss,
-      takeProfit: tradePlan.take_profit_1,
-      source: "AUTO_SCHEDULER",
-      predictionId: inserted.rows[0].id,
-      notes: `Sesión: ${indicators.signals.market_session} | Calidad: ${tradeQuality.trade_quality}`
-    }).catch(err => console.error("Error al registrar bitácora automática:", err.message));
   }
 
   return {

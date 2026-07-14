@@ -491,6 +491,27 @@ router.post("/predict_scalp", async (req, res) => {
       ]
     );
     
+    if (orderPlaced) {
+      try {
+        const { logOrderOpen } = await import("../services/tradingJournalService.js");
+        const brokerPositionId = orderResult?.position || orderResult?.orderId || null;
+        await logOrderOpen({
+          symbol: cleanSymbol,
+          action: direction,
+          volume: volume ? Number(volume) : 0.01,
+          entryPrice: indicators.lastPrice,
+          stopLoss: sl,
+          takeProfit: tp,
+          source: "XPRO_TERMINAL",
+          predictionId: dbResult.rows[0].id,
+          brokerPositionId,
+          notes: `Manual Trade Scalp XPRO | Señal: SCALP_000`
+        });
+      } catch (logErr) {
+        console.error("Error al registrar bitácora manual scalp XPRO:", logErr.message);
+      }
+    }
+    
     // Send Telegram Notification ONLY if smart allowed is true
     if (smartFilter && smartFilter.smart_allowed === true) {
       try {

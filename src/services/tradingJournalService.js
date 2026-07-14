@@ -319,24 +319,36 @@ export async function getHighestOpenTradeScore(symbol) {
     const getEquivalentSymbols = (sym) => {
       const clean = sym.replace(/[\/-]/g, "");
       // Oro / Gold
-      if (["XAUUSD", "402044083", "402044081", "GOLD", "GC=F", "401203119"].includes(clean)) {
-        return ["XAUUSD", "402044083", "402044081", "GOLD", "GC=F", "401203119"];
+      if (["XAUUSD", "402044083", "GOLD", "GC=F"].includes(clean)) {
+        return ["XAUUSD", "402044083", "GOLD", "GC=F"];
       }
       // EURUSD
-      if (["EURUSD", "401449254", "401483120", "EUR/USD"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
-        return ["EURUSD", "401449254", "401483120", "EUR/USD", "EUR_USD"];
-      }
-      // GBPUSD
-      if (["GBPUSD", "401203130", "GBP/USD"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
-        return ["GBPUSD", "401203130", "GBP/USD", "GBP_USD"];
+      if (["EURUSD", "402044081", "EUR/USD"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
+        return ["EURUSD", "402044081", "EUR/USD", "EUR_USD"];
       }
       // USDJPY
-      if (["USDJPY", "401203195", "USD/JPY"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
-        return ["USDJPY", "401203195", "USD/JPY", "USD_JPY"];
+      if (["USDJPY", "401449254", "USD/JPY"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
+        return ["USDJPY", "401449254", "USD/JPY", "USD_JPY"];
+      }
+      // GBPUSD
+      if (["GBPUSD", "402044082", "GBP/USD"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
+        return ["GBPUSD", "402044082", "GBP/USD", "GBP_USD"];
+      }
+      // EURNZD
+      if (["EURNZD", "401203127", "EUR/NZD"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
+        return ["EURNZD", "401203127", "EUR/NZD", "EUR_NZD"];
+      }
+      // USTEC (US Tech 100)
+      if (["USTEC", "402044078", "USTECH100"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
+        return ["USTEC", "402044078", "USTECH100", "US Tech 100", "US Tech 100 CFD"];
       }
       // BTCUSD
       if (["BTCUSD", "402044422", "BTC/USD"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
         return ["BTCUSD", "402044422", "BTC/USD", "BTC_USD"];
+      }
+      // ETHUSD
+      if (["ETHUSD", "401483119", "ETH/USD"].map(s => s.replace(/[\/-]/g, "")).includes(clean)) {
+        return ["ETHUSD", "401483119", "ETH/USD", "ETH_USD"];
       }
       return [sym, clean];
     };
@@ -352,7 +364,7 @@ export async function getHighestOpenTradeScore(symbol) {
         INNER JOIN scalp_predictions sp ON tj.prediction_id = sp.id
         WHERE tj.symbol = ANY($1) AND tj.status = 'OPEN'
         UNION ALL
-        SELECT p.trade_score AS score
+        SELECT COALESCE(p.probability_up, p.probability_down, 50) AS score
         FROM trading_journal tj
         INNER JOIN predictions p ON tj.prediction_id = p.id
         WHERE tj.symbol = ANY($1) AND tj.status = 'OPEN'
