@@ -1066,7 +1066,7 @@ router.post("/predict_scalp", async (req, res) => {
       )
       VALUES
       (
-        $1, $2, $3, $4, $5, $6, NOW() + INTERVAL '15 minutes', $7, $8, $9, $10,
+        $1, $2, $3, $4, $5, $6, NOW() + INTERVAL '30 minutes', $7, $8, $9, $10,
         $11, $12, 'PENDING', 'XAU_SCALP', $13, 'SCALP_000', $14, $15, $16, $17,
         $18, $19, $20, $21, $22, $23, $24
       )

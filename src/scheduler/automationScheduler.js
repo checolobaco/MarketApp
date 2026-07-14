@@ -58,7 +58,7 @@ export function startAutomationScheduler() {
         await runAutoForexPrediction(state);
       }
 
-      // — Validar y Cerrar Posiciones Expiradas (15 minutos) —
+      // — Validar y Cerrar Posiciones Expiradas (30 minutos) —
       await closeExpiredPositions();
 
       markAutomationRun({ last_error: null });
@@ -138,7 +138,7 @@ async function runAutoXproPrediction(state) {
       const prediction = await createXauScalpPrediction({
         symbol,
         signal,
-        horizon_minutes: 15,
+        horizon_minutes: 30,
         isXpro: true,
         volume: item.volume !== undefined ? item.volume : undefined
       });
@@ -211,7 +211,7 @@ async function runAutoForexPrediction(state) {
       const prediction = await createXauScalpPrediction({
         symbol,
         signal,
-        horizon_minutes: 15,
+        horizon_minutes: 30,
         isXpro: false,
         preferredProvider: "FOREX_COM",
         volume: item.volume !== undefined ? item.volume : undefined
@@ -402,7 +402,7 @@ async function sendTelegramSessionExpiredAlert({
     : "N/A";
 
   const message = `
-⌛ *OPERACIÓN CERRADA POR EXPIRACIÓN DE SESIÓN (15 MIN)*
+⌛ *OPERACIÓN CERRADA POR EXPIRACIÓN DE SESIÓN (30 MIN)*
 ────────────────────────
 *Instrumento*: ${displaySymbol}
 *Dirección*: ${emoji}
@@ -410,8 +410,8 @@ async function sendTelegramSessionExpiredAlert({
 *Beneficio/Pérdida*: *${pipsFormatted} pips* (${pnlFormatted})
 
 *Detalles del Cierre*:
-📌 *Motivo*: Expiración del tiempo límite de sesión (15 minutos)
-⏱️ *Duración*: 15 minutos
+📌 *Motivo*: Expiración del tiempo límite de sesión (30 minutos)
+⏱️ *Duración*: 30 minutos
 💵 *Entrada*: $${entryPrice}
 🚪 *Salida*: $${exitPrice}
 
@@ -471,7 +471,7 @@ async function closeExpiredPositions() {
     const expiredPositions = rows.filter(row => {
       const createdAt = new Date(row.created_at);
       const diffMinutes = (now - createdAt) / (1000 * 60);
-      return diffMinutes >= 15; // 15 minutos o más (alineado con horizonte de scalp)
+      return diffMinutes >= 30; // 30 minutos o más
     });
 
     if (expiredPositions.length === 0) return;
@@ -524,7 +524,7 @@ async function closeExpiredPositions() {
             await logOrderClose({
               brokerPositionId: pos.broker_position_id,
               exitPrice: exitPrice,
-              notes: "Cierre automático al vencimiento de sesión (15 minutos)."
+              notes: "Cierre automático al vencimiento de sesión (30 minutos)."
             });
 
             // Cerrado en broker y guardado en diario local. Evitamos doble envío a Telegram delegando al motor de backtesting.
@@ -564,7 +564,7 @@ async function closeExpiredPositions() {
             await logOrderClose({
               brokerPositionId: pos.broker_position_id,
               exitPrice: exitPrice,
-              notes: "Cierre automático al vencimiento de sesión (15 minutos)."
+              notes: "Cierre automático al vencimiento de sesión (30 minutos)."
             });
 
             // Cerrado en broker y guardado en diario local. Evitamos doble envío a Telegram delegando al motor de backtesting.
