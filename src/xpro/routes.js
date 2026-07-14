@@ -88,7 +88,18 @@ router.get("/positions", async (req, res) => {
   try {
     const client = getClient(req);
     const result = await client.getOpenPositions();
-    res.json({ ok: true, data: result });
+    const rawPositions = result.positions || [];
+
+    // Enriquecer posiciones para asegurar que tengan el campo pnl correcto
+    const enriched = rawPositions.map(pos => {
+      const pnlVal = pos.pnl !== undefined ? pos.pnl : (pos.profit !== undefined ? pos.profit : 0);
+      return {
+        ...pos,
+        pnl: Number(pnlVal)
+      };
+    });
+
+    res.json({ ok: true, data: enriched });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }

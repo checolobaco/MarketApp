@@ -141,6 +141,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (sessionToken && sessionUsername) {
     loadAllData();
     loadAutomationSettings();
+    startRealtimePnlPolling();
   }
 
   if (btnRefreshAccount) {

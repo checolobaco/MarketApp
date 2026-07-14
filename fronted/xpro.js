@@ -19,6 +19,8 @@ const accEquity = document.getElementById("acc-equity");
 const accMargin = document.getElementById("acc-margin");
 const accUnrealizedPnl = document.getElementById("acc-unrealized-pnl");
 const accLeverage = document.getElementById("acc-leverage");
+const chkRealtimePnl = document.getElementById("chk-realtime-pnl");
+const btnRefreshAccount = document.getElementById("btn-refresh-account");
 
 const marketSelect = document.getElementById("market-select");
 const marketSearchQuery = document.getElementById("market-search-query");
@@ -114,8 +116,48 @@ document.addEventListener("DOMContentLoaded", () => {
   tokenInput.value = localStorage.getItem("xpro_token_saved") || "";
 
   updateSessionUI();
+  
+  // Restablecer checkbox de P&L en tiempo real desde localStorage
+  const savedRealtimePnl = localStorage.getItem("xpro_realtime_pnl");
+  if (chkRealtimePnl && savedRealtimePnl !== null) {
+    chkRealtimePnl.checked = savedRealtimePnl === "true";
+  }
+
   if (xproToken) {
     loadAllData();
+    startRealtimePnlPolling();
+  }
+
+  if (btnRefreshAccount) {
+    btnRefreshAccount.addEventListener("click", async () => {
+      btnRefreshAccount.disabled = true;
+      btnRefreshAccount.innerHTML = "Actualizando... 🔄";
+      try {
+        await Promise.all([
+          loadAccountDetails(),
+          loadPositions()
+        ]);
+        showToast("Información de cuenta y P&L flotante actualizados");
+      } catch (err) {
+        showToast("Error al actualizar información", "error");
+      } finally {
+        btnRefreshAccount.disabled = false;
+        btnRefreshAccount.innerHTML = "Actualizar 🔄";
+      }
+    });
+  }
+
+  if (chkRealtimePnl) {
+    chkRealtimePnl.addEventListener("change", () => {
+      localStorage.setItem("xpro_realtime_pnl", String(chkRealtimePnl.checked));
+      if (chkRealtimePnl.checked) {
+        startRealtimePnlPolling();
+        showToast("P&L flotante en tiempo real activado");
+      } else {
+        stopRealtimePnlPolling();
+        showToast("P&L flotante en tiempo real desactivado");
+      }
+    });
   }
 });
 
@@ -167,6 +209,7 @@ authForm.addEventListener("submit", async (e) => {
       showToast("Conexión con XPRO establecida exitosamente");
       updateSessionUI();
       loadAllData();
+      startRealtimePnlPolling();
     } else {
       throw new Error(result.error || "Fallo en la autenticación del token");
     }
@@ -180,6 +223,7 @@ authForm.addEventListener("submit", async (e) => {
 btnDisconnect.addEventListener("click", () => {
   xproToken = null;
   localStorage.removeItem("xpro_token");
+  stopRealtimePnlPolling();
   showToast("Cuenta desconectada");
   updateSessionUI();
 });
@@ -502,6 +546,7 @@ async function loadPositions() {
     const result = await response.json();
 
     if (result.ok && Array.isArray(result.data)) {
+      hasOpenPositions = result.data.length > 0;
       if (result.data.length === 0) {
         positionsTableBody.innerHTML = `
           <tr>
@@ -1125,5 +1170,37 @@ async function loadLocalCandleChart(symbol, predictionData = null) {
   } catch (error) {
     console.error("Error al cargar velas locales:", error);
     showToast("Error al cargar gráfico local: " + error.message, "error");
+  }
+}
+
+let realtimePnlInterval = null;
+let hasOpenPositions = false;
+
+function startRealtimePnlPolling() {
+  stopRealtimePnlPolling();
+  if (!chkRealtimePnl || !chkRealtimePnl.checked) return;
+  if (!xproToken) return;
+
+  realtimePnlInterval = setInterval(async () => {
+    try {
+      if (!hasOpenPositions) {
+        return;
+      }
+      if (xproToken) {
+        await Promise.all([
+          loadAccountDetails(),
+          loadPositions()
+        ]);
+      }
+    } catch (e) {
+      console.warn("Error in real-time P&L polling:", e);
+    }
+  }, 5000);
+}
+
+function stopRealtimePnlPolling() {
+  if (realtimePnlInterval) {
+    clearInterval(realtimePnlInterval);
+    realtimePnlInterval = null;
   }
 }
